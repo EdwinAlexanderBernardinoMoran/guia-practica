@@ -1,0 +1,157 @@
+El creador de PHP es:
+    -Rasmus Lerdorf.
+
+¿Cómo interactúa una página web con tu backend?.
+
+Todo esto se basa en un modelo llamado Client Sever. Toda aplicación está guardada en un servidor, el cual entrega una copia a cada cliente que lo solocite.
+
+Repositorio de PHP
+-sudo add-apt-repository ppa:ondrej/php
+-sudo apt install php (instala la ultima version)
+-sudo dpkg --get-selections | grep php
+-sudo a2enmod php8.2 (Habilita la version de php)
+-sudo a2dismod php8.2 (Deshabilita la version de php)
+-sudo systemctl restart apache2 
+
+-En comillas dobles se pueden poner variables, mientras que en comillas simples solo texto
+-PHP es un lenguaje interpretado, no pasa por un proceso de compilacion.
+- Servidor Físico o VPS: Es la computadora que se encarga de guardar tu página web y mantenerla accesible 24/7.
+- Servidor Web: Es un programa que corre  dentro de nuestro servidor fisico y se encarga de gestionar cualquier petición que llegue al mismo. Esta peticion es procesada por algún lenguaje de programación y al final devuelve una respuesta.
+- PUT: Sirve para actualizar todos los registros de la BD.
+- PATCH: Actualiza campos especificos.
+- DELETE: Elimina datos, existe algo que se conoce como "Soft Delete", realmente no se borra solo no se vuelve a mostrar.
+
+IMPORTANT!
+
+-Una hora tiene 3600 segundos
+-Un minutos tiene 60 segundos
+
+DEBUGGING
+
+ var_dump() = Inspecciona el contenido de dicha variable
+ print_r() = Inspecciona el contenido de dicha variable
+
+PRESEDENCIA
+
+  Nos dice qué operación pasará primero y qué operación pasará despues.
+  La presedencia sucede a algo que se llama asociatividad.
+
+  Primero asigna luego opera. Existe asociatividad a izquierdas y aderechas.
+
+CONSTANTES
+ define('NOMBRE', 'valor');
+
+CASTING
+ Es cuando forzamos que un tipo de dato se convierta a otro tipo de dato.
+
+OPERADORES LÓGICOS.
+  Son los operadores que nos ayudan a combinar dos o más afirmaciones para definir si una oración es cierta o falsa. Su uso es basado en las tablas de verdad.
+
+OPERADORES ARITMETICOS:
+  Adición = +
+  Sustraccion = -
+  Multiplicacion = *
+  Division = /
+  Módulo = %
+  Potenciación = **
+  Identidad = +
+  Negación = !
+
+OPERADORES RELACIONALES
+  asignacion =
+  igual ==
+  identico ===
+  diferente !=
+  diferente pero compara tipos !==
+  menor que <
+  mayor que >
+  mayor o igual que >=
+  menor o igual que <=
+  nave espacial <=>
+  fusión de null ?? : Averigua cual es la primera variable definida
+  operador de incremento += ó ++ solamente podemos incrementar en 1
+  operador de decremento -= ó -- solamente podemos decrementar en 1
+  operador de multiplicacion *=
+  operador de division /=
+  operador de concatenacion .=
+
+ARREGLOS.
+  Los arreglos se identifican por algo llamado subindice.
+  
+  -Existen dos formas de declarar arreglos
+  * [20, 18, 40];
+  * array(20, 18, 40);
+
+ARREGLOS ASOCIATIVOS.
+  Los arreglos asocitivos se pueden acceder a ellos por medio de una palabra .
+
+-Esta es la forma de comunicarnos con JavaScript.
+
+
+CONDICIONALES.
+  -Switch: La principal diferencia es que switch funciona con casos, es decir, dependiendo de un caso tomaremos una decición u otra. Mientras que if y else te permiten hacer comparaciones, switch te ayuda a decidir qué hacer dependiendo del caso que tengas presente.
+
+  ¿Cuándo debo usar switch?
+
+  Usalo Cuando ...
+  -Necesites decidir entre un caso u otro.
+  -Quieras una forma fácil de plantear diversas situaciones.
+  -Usarlo no signifique sacrificar la legibilidad de tú código.
+
+  No lo uses cuando ...
+  -Necesites hacer comparaciones complejas.
+  -Quieras verificar un rango de numeros.
+  -Necesites poner grandes bloques de código y/o tu código se vuelva ilegible.
+
+CICLOS
+
+  Un bucle es una estructura de control que nos ayuda a repetir un bloque de código las veces que lo necesitemos.
+
+  * Bucle : Es una estructura de control que nos ayuda a duplicar codigo.
+  * Contador : Es una variable que nos ayuda a llevar la cuenta de cuantas veces se repite un bucle.
+  * Iteracion : Nos ayuda saber en que iteracion estamos ( las veces que da vuelta el bucle)
+
+  El ciclo Do While funciona para que no se repita, cosas en BD, o no se dupliquen registros.
+
+ 
+FUNCIONES DE PHP.
+
+in_array(): se utiliza para comprobar si un valor específico existe en un array. Esta función toma dos argumentos: el valor que deseas buscar y el array en el que deseas realizar la búsqueda. Si el valor se encuentra en el array, in_array() devuelve true; de lo contrario, devuelve false.
+
+json_encode(): se utiliza para convertir datos en formato PHP (como arrays o objetos) en una cadena de texto con formato JSON. JSON (JavaScript Object Notation) es un formato de intercambio de datos que es legible por humanos y también fácilmente procesable por las computadoras.
+
+explode(): se utiliza para dividir una cadena de texto en subcadenas más pequeñas o elementos, basándose en un delimitador específico.
+
+array_diff(variable, array()): Se utiliza para remover algo que viene en un array, especificamos en un array que es lo que queremos remover.
+
+count(): Cuenta cuantos elementos hay en un arreglo.
+
+array_push($array, valor): Agrega un nuevo elemento al final del arreglo.
+
+is_array($variable): Verifica un arreglo.
+
+explode('serparado', $variable): Convierte un string a un arreglo.
+
+implode('serparado', $variable): Convierte un arreglo a un string.
+
+array_keys(): Devuelve todos los subindices de un arreglo.
+
+attach(): Agrega sin eleminar los existentes.
+
+sync(): Elimina lo que existe y crea eso que asignamos.
+
+
+- Los controladores son una pieza de ditribucion no como una pieza de logica.
+- Los HTTP Status Code es la forma de que el backend le da un spoyler de como le va a nuestra solicitud.
+- Los Metodos HTTP es la forma del frontend le da un spoyler al backend del tipo de solicitud que vamos hacer.
+- En un proyecto deberia de tener 3 bases de datos, una de produccion, una de prueva y una de desarrollo
+
+
+// Codigo de calculo de fechas.
+
+// $fe = "12/12/2023 00:01:56";
+// $fe2 = "12/12/2023 00:11:30";
+// $fechaInicio = strtotime ($fe);
+// $fechaTermino = strtotime($fe2);
+// echo $diferenciaTiempo = floor(($fechaTermino - $fechaInicio) / 60) . "\n";
+  <button mat-menu-item [matMenuTriggerFor]="fish">Fishes</b

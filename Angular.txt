@@ -1,0 +1,168 @@
+// ONE WAY DATA BINDING - ENLAZADO EN UNA SOLA VÍA
+
+El "one-way data binding" (enlace de datos unidireccional) en Angular es una técnica utilizada para transmitir datos desde el componente de Angular hacia la vista (template) de forma unidireccional. Esto significa que los datos fluyen solo en una dirección, desde el componente hacia la vista, y cualquier cambio en los datos del componente se refleja automáticamente en la vista.
+
+En el one-way data binding, puedes enlazar datos desde el componente hacia la vista utilizando la sintaxis de interpolación ({{ }}), la propiedad del atributo ([property]), o mediante eventos ((event)). Sin embargo, los cambios realizados en la vista no se propagan automáticamente de vuelta al componente. Esto evita que se produzcan cambios inesperados y ayuda a mantener una estructura clara y predecible.
+
+
+One-Way Data Binding: Los datos fluyen en una sola dirección, ya sea desde el componente hacia la UI (propiedades y eventos) o desde la UI hacia el componente (eventos).
+Two-Way Data Binding: Los datos fluyen en ambas direcciones, sincronizando automáticamente los valores entre el componente y la UI (propiedades y eventos).
+La elección entre estos dos enfoques depende de tus necesidades específicas. El Two-Way Data Binding puede ser muy conveniente para formularios y otras situaciones en las que necesitas una sincronización continua entre la UI y el componente. Sin embargo, también puede aumentar la complejidad y el riesgo de ciclos infinitos en algunas situaciones. El One-Way Data Binding es más controlado y puede ser preferible en ciertos casos para evitar complicaciones innecesarias.
+
+
+*****************************************************************************************
+
+Property Binding . Es la manera que dispone Angular para controlar y modificar las propiedades de los distintos elementos de HTML. Para esto, simplemente utiliza los corchetes [] para poder modificar dinámicamente ese atributo desde el controlador. . Utilidades
+
+*****************************************************************************************
+
+
+
+// Cuando es Algo propio de Angular siempre se exporta de primero
+// Importamos el FormsModule ya que lo estamos ocupando aca especificamente
+<!--
+  Sintaxis conocida como caja de banas [()] = es To-Way-Data-Biding hacemos las dos cosas al mismo tiempo
+
+  () = significa que es un evento.
+  [] = Asociar un Atributo, property Binding, es para configurar propiedades de los elementos HTML, y String interpolación es para rendirizar contenido.
+
+  Siempre que miremos la palabra Module debemos importarlos en los Inputs: Ejemplo (FormsModule)
+-->
+
+
+Para poder hacer debugger utilizamo la palabra (debugger)
+
+************************************************************************************************************************************
+
+- ng g m gifs = (comando para crear un modulo, nombre del modulo)
+- cuando se crean modulos es neceserio importarlos en el modulo principal.
+
+- Existe dos tipos de rutas, las principales y las hijas, las principales se importan asi: (RouterModule.forRoot(routes))
+
+- El Router se importa y luego se exporta.
+
+- Cuando queremos utilizar algo fuera de nuestro modulo, es necesario exportalo en en el modulo.
+
+
+************************************************************************************
+
+Es necesario poner routerLinkActiveOptions="{exact: true}" para que no se activen las dos rutas con la clase active.
+
+<ul class="list-group">
+  <li routerLink="" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true}" class="list-group-item">
+    Home page
+  </li>
+  <li routerLink="about" routerLinkActive="active" class="list-group-item">
+    About
+  </li>
+
+  <li routerLink="contact" routerLinkActive="active" class="list-group-item">
+    Contact
+  </li>
+</ul>
+
+************************************************************************************
+
+-Cuando queremos cargar algo de manera perezosa no se exporta en el app.module.ts, nunca se 
+exporta ahi, porque si lo haces, entonces cargara eso al abrir la app.
+
+-Si generamos un Componente digamos countries, y generamos su modulo y su archivo de rutas dentro de countries, para conectarlos con la aplicacion debemos hacer por carga perezosa, en el archivo de rutas principal.
+
+- Eso se hace para realizar carga perezosa
+{
+  path: 'countries',
+  loadChildren: () => import('./countries/countries.module').then(m => m.CountriesModule)
+},
+
+- En Angular, el "debounce time" es un concepto que se refiere a la acción de retrasar la ejecución de un código o una función en respuesta a eventos como la escritura en un input, para evitar ejecuciones excesivas y costosas
+
+El "debounce time" se usa comúnmente para mejorar la eficiencia y la experiencia del usuario en situaciones en las que se necesita realizar alguna acción (como enviar una solicitud de búsqueda a un servidor) después de que el usuario ha dejado de interactuar con un componente durante un breve período de tiempo. En lugar de ejecutar la acción de inmediato con cada evento, se retrasa su ejecución y se espera un tiempo determinado después del último evento antes de llevar a cabo la acción.
+
+
+-Cuando queremos pasar algo por argumento.
+<input
+  type="text"
+  [placeholder]="placeholder"
+  class="form-control"
+>
+
+Ese placeholder se tiene que declarar en el componente ts.
+  @Input()
+    public placeholder: string = '';
+
+Si queremos utilizar este componente en otro que este fuera del modulo hay que exportarlo en el modulo que pertenece.
+
+- Para poder hacer un componente reutilizable, un input, mandamos entre corchetes el valor que queremos asignarle, luego ese valor de los corchetes lo asignamos en el componente donde esta el input con el decorador @Input abajo de el la propiedad, luego exportamos ese componente en el modulo, si queremos utilizarlo en otro lado, debemos importar el modulo donde exportamos el componente, luego pasarselo asi: ejemplo="ejemplo".
+
+- En angular puedes solo declara una peticion, si no lleva la palabra suscribe, si de lo contrario lleva esa palabra estamos ejecutando esa peticion.
+
+searchCapital(term: string): Observable<Country[]>{
+    return this.http.get<Country[]>(`${this.apiUrl}/capital/${term}`)
+}
+
+En el ejemplo anterior solo declaramos esa peticion no la ejecutamos
+
+-Para poder llamar nuestro servicio, desde nuestro componente tenemos que inyectarlo.
+
+-Podemos solo declarar todos los metodos de peticion en lo servicios luego en los componentes se mandan a llamar.
+
+-Que es un Debounce es cuando la persona deja de escribir lanzamos la peticion en lugar precionar enter.
+- El OnInit es un componente del ciclo de vida de los componentes de Angular y se inicializa o se ejecuta cuando nuestro componente se inicializa o se ejecuta se pone despues del constructor.
+
+-El OnInit se inicializa cuando el componente se inicializa y especificamente es despues del constructor.
+
+-Siempre que se haga un suscribe de una componente que no sea de los metodos http, siempre se hace una limpieza a esa suscripcion.
+
+********************************************************************************
+
+Las interface y los Type son dos formas de definir el tipo de un dato o de una función. 
+
+Una interfaz es una definición de un conjunto de propiedades y métodos que un tipo debe tener. Por ejemplo, la siguiente interfaz define un tipo de persona:
+
+Un tipo es una definición de un tipo de dato. Puede ser un tipo básico, como string, number o boolean, o un tipo compuesto, como una tupla o un objeto. Por ejemplo, la siguiente declaración define un tipo de tupla con dos elementos: Este tipo puede ser asignado a cualquier objeto que tenga dos elementos de tipo string y number, respectivamente.
+
+Las principales diferencias entre interfaces y tipos en TypeScript son las siguientes:
+
+Extendibilidad: Una interfaz siempre es extensible, lo que significa que se puede crear un nuevo tipo que implemente la interfaz existente. Un tipo no es extensible, lo que significa que no se pueden agregar nuevas propiedades o métodos a un tipo existente.
+
+Sobreescritura: Una interfaz no permite la sobreescritura de propiedades o métodos. Un tipo permite la sobreescritura de propiedades y métodos, siempre que el tipo de retorno y los argumentos de la función sean compatibles.
+
+Conversión implícita: Una interfaz no permite la conversión implícita. Un tipo permite la conversión implícita, siempre que el tipo de destino sea compatible con el tipo de origen.
+
+En general, se recomienda usar interfaces para definir el tipo de un objeto o de una función. Las interfaces son más flexibles que los tipos y permiten la herencia.
+
+Los tipos se pueden usar para definir el tipo de un dato o de una función cuando no se necesita la flexibilidad de una interfaz. Por ejemplo, se puede usar un tipo para definir el tipo de una tupla o de un objeto que no necesita ser heredado.
+
+type Region = 'Africa' | 'Americas' | 'Asia' | 'Europe' | 'Oceania';
+
+public regions: Region[] = ['Africa', 'Americas', 'Asia', 'Europe', 'Oceania'];
+
+********************************************************************************************************
+
+* Colocar propiedad en el componente de searchbox
+  {
+    @Input()
+    public initialValue: string = '';
+  }
+
+* Colocar propiedad en el componente html de searchbox en el input
+  {
+    [value] = "initialValue"
+  }
+
+*******************************************************************************************************
+
+PIPE En Angular
+
+los pipes son funciones que se utilizan en las expresiones de plantilla para aceptar un valor de entrada y devolver un valor transformado. Los pipes son útiles porque se pueden utilizar en toda la aplicación, declarando cada pipe solo una vez.
+
+* uppercase
+* lowerscase
+* titlecase
+* slice:0:5
+
+Comando para generar componentes.
+
+ng g c shared/components/menu --inline-style --skip-tests
+
+ng g m products --module app --route products

@@ -1,0 +1,36 @@
+RELACION UNO A UNO.
+* ----------------- *
+
+Existen entidades fuertes y entidades deviles, las entidades fuertes son las que no dependen de otra entidad, y las deviles son las que dependen de otra entidad.
+
+cuando se habla de relacion uno a uno significa que no puede estar mas de una vez el id de la tabla relacionada que corresponde a la FK. Para esto la FK debe ser unica.
+
+
+RELACION UNO A MUCHOS.
+* -------------------- *
+
+Cuando se habla de relacion uno a muchos, significa que se puede ingresar mas de una vez la llave o clave foranea de la tabla relacionada.
+
+
+RELACION DE MUCHOS A MUCHOS.
+* -------------------------- *
+
+Cuando hacemos una relacion de muchos a muchos, es necesario crear una tabla intermedia entre las dos tablas a relacionar esta tabla se le llama tabla (PIBOTE). El nombre que se le da a esta tabla, es el nombre de las dos tablas en singular y en orden alfabetico, primero va la FK-tabla de la tabla relacionada, FK-tabla de la tabla con la cual tiene la relacion
+
+RELACIONES UNO A UNO POLIMORFICAS.
+* -------------------------------- *
+
+Cuando se habla de relacion uno a uno polimorficas, es cuando dos tablas se relacionan con una, osea en dicha tabla estan las dos llaves foraneas de las tablas que se relacionan, pero como es relacion uno a uno, las dos foraneas, no pueden ser nulas, ya probablemente una quedara basia, esto da un problema y la relacion polimorfica indica que se deben borrar las llaves foraneas de las tablas relacionadas, y agregar en vez de las foraneas, un primer campo (nombre de la tabla en singular, able_id, indica el ID,sin importar la tabla ) y el otro campo indicara a que tabla pertenece (nombre de la tabla en singula, able_type, este campo determinara a que tabla pertenece, aca ba el nombre del modelo de dicha tabla).
+
+Luego como la relacion es uno a uno, creamos una clave PK compuesta y eliminamos la llava normal de dicha tabla en la cual se relacionan las dos tablas, se define una PK compuesta con una unico campo por si solo no es suficiente para identificar a un solo registro, en este caso able_id y able_type serian llaves primarias para identificar el id, y tabla.
+
+
+RELACIONES DE UNO A MUCHOS POLIMORFICA.
+* ------------------------------------ *
+
+Cuando se habla de relacion uno a muchos polimorficas, es cuando dos tablas se relacionan con una, osea en dicha tabla estan las dos llaves foraneas de las tablas que se relacionan, pero como es relacion uno a muchos, las dos foraneas, no pueden ser nulas, ya probablemente una quedara basia, esto da un problema y la relacion polimorfica indica que se deben borrar las llaves foraneas de las tablas relacionadas, y agregar en vez de las foraneas, un primer campo (nombre de la tabla en singular, able_id, indica el ID,sin importar la tabla ) y el otro campo indicara a que tabla pertenece (nombre de la tabla en singula, able_type, este campo determinara a que tabla pertenece, acaba el nombre del modelo de dicha tabla).
+
+RELACIONES DE MUCHOS A MUCHOS POLIMORFICAS.
+* ---------------------------------------- *
+
+En este caso hay dos tablas que se relacionan con una en este caso es de muchos a muchos polimorifcas. Es similar a crear una relacion muchos a muchos, creamos una tabla Pibote, con el nombre de las dos tablas en singular en orden alfabetico

@@ -1,0 +1,83 @@
+Toke de GitGub
+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
+
+Comando para resolver el problema de no poder subir archivos en gitgub con ssh
+* ssh -T git@github.com
+
+* Si queres dedicarte al front es hora que aprendas todo sobre imágenes
+* Resolución medidas
+* Maquetados
+* Esquenas de color
+* CMYJ RGB
+* Diseño web y diseño Ux y diseño UI
+* Html
+* Sass
+* Css
+* Tailwind
+* Bootstrap
+* Librerías de js que sea. Para front
+
+dotnet tool install dotnet-aspnet-codegenerator --global
+dotnet tool install dotnet-ef --global
+dotnet add package Pomelo.EntityFrameworkCore.Mysql
+dotnet add package Microsoft.EntityFrameworkCore.Design
+dotnet add package Microsoft.EntityFrameworkCore.Tools
+dotnet add package Microsoft.EntityFrameworkCore.SqlServer
+dotnet add package Microsoft.VisualStudio.Web.CodeGeneration.Design
+dotnet restore ClothingSystem.sln
+
+git checkout --(nombre archivo): Este comando funciona para revertir los cambios de un commit.
+
+git diff: Este comando funciona para ver lo que hemos hecho si guardamos cambios y no lo subimos al staged
+
+git diff staged: Este comando funciona para ver los cambios que hemos hecho si ya lo asubimos al staged pero 
+no le hemos echo ningun commit.
+
+git reset --soft HEAD^: (HEAD apunta al ultimo commit, si queremos a puntar al commit anterior usamos esto, (^))
+
+git reset --hard (nombre del archivo): Este comando te regresa a la historia enterior, y borra todo lo demas.
+
+git reset HEAD (nombre_archivo): Este comando funciona para eliminar un archivo del staged.
+
+git reset --mixed (hash): Para regresar a un punto de la historia
+
+git commit -am "(mensaje)": Este comando funciona cuando queremos agregar y de una sola vez hacer el commit.
+
+git commit --amend -m "(mensaje)": Este comando funciona cuando queremos actualize un commit mal escrito"
+
+git reset --soft HEAD^: Este comando funciona cuando queremos agregar más archivos en el mismo commit. (Solo HEAD apunta al commit que acabos de hacer).
+
+
+
+git mv (nombre del archivo) (renombre del archivo): Este comando funciona para renombrar archivozz.
+
+git rm (nombre del archivo): Este comando funciona para borrar archivos.
+
+git add -u: Este comando funciona para actualizar todo depues de haber borrado un archivo en GIT.
+
+git branch (nombre de la rama): Este comando crea una nueva rama.
+
+git branch -d (nombre de la rama): Este comando elimina una nueva rama.
+
+git checkout -b (nombre de la rama): Este comando crea la rama y automaticamente se mueve a dicha rama.
+
+git checkout (): se mueve a la rama
+
+git stash: Este comando funcion para guardar cambios que estan en desarrollo si necesitamos desplegar nuestra informacion.
+
+git stash list: Este comando nos muestra la lista de stash q tenemos.
+
+git stash pop: Saca de stash lo q tenemos ahi para llevarlo a la rama principal y lo borra.
+
+git stash drop: Este comando elimina los stash.
+
+git stash apply (id) : Este comando restaura un stash de la lista de stash
+
+git show stash: Muestra informacion del stash.
+
+git stash clear: Borra todas las entradas del stash, sin preguntar.
+
+git stash save --keep-index: Guarda todo menos los archivos en el 
+
+dpkg --print-architecture(comando que permite ver tu arquitectura.)
+uname -m (ver arquitectura)

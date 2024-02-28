@@ -1,0 +1,404 @@
+************   COMANDOS   ************
+
+- php artisan make:model (nombre) -m
+- php artisan make:controller PagesController --resource --model=Page
+- php artisan make:request CreateMessageRequest
+- php artisan make:controller API/PostController --api --model=Cliente --api
+- composer require laravel/breeze --dev
+- composer require livewire/livewire
+- php artisan breeze:install
+- composer require barryvdh/laravel-debugbar --dev
+- php artisan make:resource V1/AttendanceResource
+- php artisan make:resource V1/Collection/SpecialtyCollection
+
+************   GUARDAR DATOS   ************
+
+DB::table('messages')->insert([
+    "nombre" => $request->nombre,
+    "email" => $request->email,
+    "mensaje" => $request->mensaje,
+    "created_at" => Carbon::now(),
+    "updated_at" => Carbon::now()
+]);
+
+************   INSTALACION LARAVEL 8   ************
+
+composer require laravel/ui:*
+php artisan ui bootstrap --auth
+npm install
+
+************   OTROS   ************
+
+-composer update --ignore-platform-reqs
+-cp .env.example .env
+-sudo a2enmod php8.1
+-sudo a2dismod php7.3
+-sudo dpkg --get-selections | grep php
+
+Para imprimir html como estructura cambiamos la sintaxis de blade {{}} esta por esta {!! !!}.
+
+Tambien podemos verificar si un campo esta lleno o no, con la $request->has('nombre del campo')
+
+Hay un objeto q esta disponible en todas las vistas llamado: {errors->first('nombre-campo)}
+
+Hay una funcion llamada: { old('nombre-campo') }, para q a la hora de enviar el formulario, los demas campos q estan llenos si se le da enviar no se pierda el valor que se ingreso anteriormente
+
+Para imprimir html como estructura cambiamos la sintaxis de blade {{}} esta por esta {!! !!}.
+
+public function store(Request $request)
+{
+    try {
+        $matricula = new Matricula();
+        // Asigna los valores del formulario a la instancia de Matricula
+        $matricula->alumno_id = $request->input('alumno_id');
+        $matricula->seccion_id = $request->input('seccion_id');
+        // ... otros campos ...
+
+        // Guardar la matrícula
+        $matricula->save();
+
+        // Realizar cualquier otra acción necesaria si la matrícula es exitosa
+    } catch (\Exception $e) {
+        // Manejar el mensaje de error que proviene de la excepción lanzada desde el modelo
+        return response()->json(['error' => $e->getMessage()], 400);
+    }
+
+    // Si todo va bien, puedes retornar una respuesta de éxito, redireccionar, etc.
+}
+
+************   DISEÑO   ************
+Navigation.
+!-- Navigation Links -->
+                <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
+                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
+                        {{ __('Dashboard') }}
+                    </x-nav-link>
+                </div>
+
+                <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
+                    <x-nav-link :href="route('posts.index')" :active="request()->routeIs('posts.index')">
+                        {{ __('Posts') }}
+                    </x-nav-link>
+                </div>
+
+Index
+<x-app-layout>
+    <x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight flex items-center justify-between">
+            {{ __('Post') }}
+            <a href="{{ route('posts.create') }}" class="text-xs bg-gray-800 text-white rounded px-2 py-1">Crear</a>
+        </h2>
+    </x-slot>
+
+    {{-- @if(session('status'))
+        <div class="max-w-screen-xl px-3 py-2 mx-auto font-bold text-white sm:px-6 lg:px-8 bg-emerald-500 dark:bg-emerald-700">
+            {{ session('status') }}
+        </div>
+    @endif --}}
+
+    <div class="py-12">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 text-center text-lg text-gray-900">
+                    {{ __("Listado de publicaciones") }}
+                    <table class="mb-4 m-auto text-left">
+                        @foreach ($posts as $post)
+                        <tr class="border-b border-gray-200 text-sm">
+                            <td class="px-6 py-4 font-semibold">{{ $post->id }}</td>
+                            <td class="px-6 py-4">{{ $post->title }}</td>
+                            <td class="px-6 py-4">{{ $post->published_at }}</td>
+                            <td class="px-6 py-4">
+                                <a href="{{ route('posts.edit', $post) }}" class="text-indigo-600">Editar</a>
+                            </td>
+                            <td class="px-6 py-4">
+                                <form action="{{ route('posts.destroy', $post) }}" method="post">
+                                    @csrf
+                                    @method('DELETE')
+                                    <input type="submit" value="Eliminar" class="bg-gray-800 text-white rounded px-4 py-2" onclick="return confirm('Desea eliminar?')">
+                                </form>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </table>
+                    {{ $posts->links()}}
+                </div>
+            </div>
+        </div>
+    </div>
+</x-app-layout>
+
+Edit.
+    <x-app-layout>
+        <x-slot name="header">
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                {{ __('Posts') }}
+            </h2>
+        </x-slot>
+
+        <div class="py-12">
+            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6 text-gray-900">
+                        <form action="{{ route('posts.update', $post) }}" method="post">
+                            @method('PUT')
+                            @include('posts._form')
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </x-app-layout>
+
+Create.
+<x-app-layout>
+    <x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+            {{ __('Posts') }}
+        </h2>
+    </x-slot>
+
+    <div class="py-12">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 text-gray-900">
+                    <form action="{{ route('posts.store') }}" method="post">
+                        @include('posts._form')
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</x-app-layout>
+
+Form.
+@csrf
+<label for="" class="uppercase text-gray-700 text-xs">Titulo</label>
+<span class="text-xs text-red-600">@error('title') {{$message}} @enderror</span>
+<input type="text" name="title" class="rounded border-gray-200 w-full mb-4" value="{{ old('title', $post->title) }}">
+
+<label for="" class="uppercase text-gray-700 text-xs">Slug</label>
+<span class="text-xs text-red-600">@error('slug') {{$message}} @enderror</span>
+<input type="text" name="slug" class="rounded border-gray-200 w-full mb-4" value="{{ old('slug', $post->slug) }}">
+
+<label for="" class="uppercase text-gray-700 text-xs">Contenido</label>
+<span class="text-xs text-red-600">@error('body') {{$message}} @enderror</span>
+<textarea name="body" rows="5" class="rounded border-gray-200 w-full mb-4">
+    {{ old('body', $post->body)}}
+</textarea>
+
+<div class="flex justify-between items-center">
+    <a href="{{ route('posts.index')}}" class="text-indigo-600">Volver</a>
+    <input type="submit" value="Enviar" class="bg-gray-800 text-white rounded px-4 py-2">
+</div>
+
+
+************   CONTROLLER   ************
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\StorePostRequest;
+use App\Models\Post;
+use Illuminate\Http\Request;
+
+class PostController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index()
+    {
+        return view(
+            'posts.index',
+            ['posts' => Post::latest()->paginate()]
+        );
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function create(Post $post)
+    {
+        return view('posts.create', ['post' => $post]);
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(StorePostRequest $request)
+    {
+
+        $request->user()->posts()->create($request->validated());
+
+        return to_route('posts.index')->with('status', 'Post Created !');
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  \App\Models\Post  $post
+     * @return \Illuminate\Http\Response
+     */
+    public function show(Post $post)
+    {
+        //
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     *
+     * @param  \App\Models\Post  $post
+     * @return \Illuminate\Http\Response
+     */
+    public function edit(Post $post)
+    {
+        return view(
+            'posts.edit',
+            ['post' => $post]
+        );
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Post  $post
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, Post $post)
+    {
+        $request->validate([
+            'title' => 'required',
+            // Revisame esta validacion pero ignorame al mismo tiempo
+            'slug' => 'required|unique:posts,slug,'. $post->id,
+            'body' => 'required',
+        ]);
+
+        $post->update([
+            'title' => $request->title,
+            'slug' => $request->slug,
+            'body' => $request->body,
+        ]);
+
+        return to_route('posts.index')->with('status', 'Post Update !');
+
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  \App\Models\Post  $post
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy(Post $post)
+    {
+        $post->delete();
+        return to_route('posts.index')->with('status', 'Post Delete !');
+    }
+}
+
+
+
+
+
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreSpecialtyRequest;
+use App\Http\Resources\V1\Collection\SpecialtyCollection;
+use App\Http\Resources\V1\Resources\SpecialtyResource;
+use App\Models\Specialty;
+
+class SpecialtyController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index()
+    {
+        // return SpecialtyResource::collection(Specialty::latest()->paginate());
+        return new SpecialtyCollection(Specialty::latest()->paginate());
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\StoreSpecialtyRequest  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(StoreSpecialtyRequest $request)
+    {
+        Specialty::create($request->validated());
+
+        return response()->json([
+            'message' => 'Especialidad Creada'
+        ], 201);
+
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  \App\Models\Specialty  $specialty
+     * @return \Illuminate\Http\Response
+     */
+    public function show(Specialty $specialty)
+    {
+        return new SpecialtyResource($specialty);
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Specialty  $specialty
+     * @return \Illuminate\Http\Response
+     */
+    public function update(StoreSpecialtyRequest $request, Specialty $specialty)
+    {
+        $specialty->update($request->validated());
+
+        return response()->json([
+            'message' => 'Especialidad Actualizada!'
+        ], 200);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  \App\Models\Specialty  $specialty
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy(Specialty $specialty)
+    {
+        $specialty->delete();
+
+        return response()->json([
+            'message' => 'Success'
+        ], 204);
+    }
+}
+
+*************************** Plugins ***************************
+Color Highlight
+Error Lens
+IntelliCode
+IntelliCode API Usage Examples
+Laravel Blade formatter
+Laravel Blade Snippets
+Laravel Extra Intellisense
+Laravel Snippets
+Tailwind Css IntelliSense
+Terminal

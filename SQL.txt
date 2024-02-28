@@ -1,0 +1,2362 @@
+CONSULTAS SQL
+
+// seleccioname todos los datos de la tabla donde el año este entre 2023 y 2024
+SELECT * FROM asistencia WHERE anio BETWEEB 2023 AND 2024;
+
+// seleccioname todos los datos de la tabla donde el año no este entre 2023 y 2024
+SELECT * FROM asistencia WHERE anio NOT BETWEEN 2023 AND 2024;
+
+// Encuentra las 5 primeras matriculas
+SELECT year FROM asistencias WHERE id BETWEEN 1 AND 5;
+
+// Encuentra todos los nombe que incluyan el nombre de Edwin
+SELECT * FROM alumnos WHERE primer_nombre LIKE "edwin";
+
+
+
+
+
+
+
+
+Verificación del dispositivo:
+
+Se busca en la base de datos un dispositivo que coincida con el identificador proporcionado en la solicitud y que tenga un estado activo.
+Si no se encuentra el dispositivo, se devuelve una respuesta JSON indicando que el dispositivo no existe.
+Si el dispositivo no está vinculado a un cliente, se devuelve una respuesta indicando que el dispositivo no está vinculado.
+
+
+Verificación del cliente y entidad:
+
+Se verifica si el cliente al que está vinculado el dispositivo está activo.
+También se verifica si la entidad asociada al dispositivo está activa.
+Si el cliente o la entidad no están activos, se devuelve una respuesta indicando la falta de actividad.
+
+
+Obtención de la información de la ronda:
+
+Se obtiene información sobre la ronda en función del tipo de ronda (Diaria o no Diaria) y el ID de la ronda proporcionado.
+Se verifican condiciones adicionales, como el estado de la ronda y si el dispositivo está incluido en la lista de dispositivos de la ronda.
+
+
+
+Verificación del usuario:
+
+Si la ronda tiene un usuario asignado, se devuelve una respuesta indicando que la ronda ya ha sido iniciada y se proporciona el nombre del usuario.
+Si no hay usuario asignado, se busca un usuario en la base de datos con la identificación proporcionada.
+Se realizan verificaciones adicionales, como si el usuario está activo y si la contraseña proporcionada coincide con la almacenada en la base de datos.
+
+
+
+Verificación de pertenencia a la entidad:
+
+Se verifica si el usuario pertenece a la misma entidad y cliente que el dispositivo.
+
+
+
+Verificación de asistencia:
+
+Se verifica si el usuario tiene una asistencia marcada y si la última asistencia registrada no tiene una fecha de salida.
+
+
+Actualización del estado de la ronda:
+
+Se actualiza la información de la ronda en la base de datos para marcarla como "En curso" y se asigna el usuario y la fecha de inicio.
+Se guarda un registro en la tabla de historial de rondas indicando el inicio de la ronda.
+
+
+**************************************************************************************************
+
+
+Verificación del dispositivo:
+
+Se busca en la base de datos un dispositivo que coincida con el identificador proporcionado en la solicitud y que tenga un estado activo.
+Si no se encuentra el dispositivo, se devuelve una respuesta JSON indicando que el dispositivo no existe.
+Si el dispositivo no está vinculado a un cliente, se devuelve una respuesta indicando que el dispositivo no está vinculado.
+
+Verificación del cliente y entidad:
+
+Se verifica si el cliente al que está vinculado el dispositivo está activo.
+También se verifica si la entidad asociada al dispositivo está activa.
+Si el cliente o la entidad no están activos, se devuelve una respuesta indicando la falta de actividad.
+
+Verificación del usuario:
+
+Se busca un usuario en la base de datos con la identificación proporcionada.
+Se realizan verificaciones adicionales, como si el usuario está activo y si la contraseña proporcionada coincide con la almacenada en la base de datos.
+
+Creación de una nueva ronda:
+
+Se crea una nueva entrada en la tabla de rondas en la base de datos.
+Se asignan diferentes atributos a la nueva ronda, como nombre, dispositivo asociado, fecha de inicio, usuario asignado, cliente y entidad asociados, estado, tipo, tipo de ronda, etc.
+
+Registro en el historial de rondas:
+
+Se crea un nuevo registro en la tabla de historial de rondas indicando el inicio de la ronda voluntaria.
+Se registran detalles como el evento, el usuario asociado, la ronda ID, la fecha y las coordenadas.
+
+Copia de checkpoints de ronda anterior:
+
+Se busca la ronda periódica anterior (identificada por id_ronda en la solicitud) para obtener sus checkpoints.
+Se copian estos checkpoints en la nueva ronda voluntaria, ajustando la posición de acuerdo al orden original.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Rondas;
+use Illuminate\Http\Request;
+use App\Models\Checkpoints;
+use App\Models\Dispositivos;
+use App\Models\Checkpoints_Rondas;
+use App\Models\HistorialRondas;
+use App\Models\user_clientes;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use App\Models\user_entidades;
+use App\Models\Asistencias;
+use Illuminate\Support\Facades\Storage;
+use App\Models\FotosHistorialRondas;
+use App\Models\Notificaciones;
+use App\Models\RondasPeriodicas;
+use App\Models\Clientes;
+use App\Models\Entidades;
+use Carbon\Carbon;
+use App\Models\Incidencias;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\IncidenciaEmail;
+
+use Endroid\QrCode\Builder\Builder;
+use Endroid\QrCode\Encoding\Encoding;
+use Endroid\QrCode\ErrorCorrectionLevel\ErrorCorrectionLevelHigh;
+use Endroid\QrCode\Label\Alignment\LabelAlignmentCenter;
+use Endroid\QrCode\Label\Font\NotoSans;
+use Endroid\QrCode\RoundBlockSizeMode\RoundBlockSizeModeMargin;
+use Endroid\QrCode\Writer\PngWriter;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Dompdf\Options;
+
+class RondasController extends Controller
+{
+
+    public function __construct()
+    {
+        $this->middleware('auth',['except' => ['iniciarRonda_api','marcarCheckpoint','desdeCheckpoint','reportarCheckpoint','primerAtraso','segundoAtraso','marcarCheckpointGeo','caducarRonda','iniciarRondaVoluntaria_api','reportarCheckpointV','marcarCheckpointGeoV_api','marcarCheckpointQRV_api','finalizarVoluntaria_api','omitirCheckpointV_api','omitirCheckpoint_api']]);
+    }
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index()
+    {
+        if(\Helper::auth()->perfil_id == 2 || \Helper::auth()->perfil_id == 3) {
+            return view('rondas.index');
+        }
+    }
+
+    public function getData(Request $request) {
+        if(\Helper::auth()->perfil_id == 2 || \Helper::auth()->perfil_id == 3) {
+            $miEntidad = \Helper::getMyEntidad();
+
+            $date_range = $request->date;
+            $date_array = explode(" to ", $date_range);
+            $start_date = date('Y-d-m 00:00:00', strtotime($date_array[0]));
+            $end_date = date('Y-d-m 23:59:59', strtotime($date_array[0]));
+
+            $rawWhere = "(";
+            $conditions = 0;
+
+            $fquery = Rondas::where('rondas.cliente_id', \Helper::getMyCliente())
+            ->join('entidades','entidades.id','rondas.entidad_id')
+            ->when($miEntidad, function ($query) use ($miEntidad) {
+                if($miEntidad == "Todas") return $query->where('rondas.entidad_id','>=',1);
+
+                return $query->where('rondas.entidad_id', $miEntidad);
+            })
+            ->when($request->name, function ($query) use ($request) {
+                return $query->where('rondas.nombre', 'LIKE', '%'.$request->name.'%');
+            })
+            ->when($request->entity, function ($query) use ($request) {
+                return $query->where('entidades.nombre', 'LIKE', '%'.$request->entity.'%');
+            })
+            ->when($request->date, function ($query) use ($start_date, $end_date) {
+                $between = [$start_date, $end_date];
+                return $query->whereBetween('rondas.fecha_inicio', $between);
+            })
+            ->when($request->type, function ($query) use ($request) {
+                return $query->where('rondas.tipo_ronda', 'LIKE', '%'.$request->type.'%');
+            });
+
+            /* $fquery->join('dispositivos','dispositivos.id','rondas.dispositivo_id');
+            if($request->dispositivo) {
+                $rawWhere .= "dispositivos.identificador LIKE '%".$request->dispositivo."%'";
+                $conditions++;
+            } */
+            $rawWhere .= ")";
+
+            if($rawWhere != '()') $fquery->whereRaw($rawWhere);
+            //$fquery->select('rondas.*','dispositivos.nombre')->orderBy('rondas.id','DESC');
+
+            $query = $fquery->orderBy('rondas.updated_at','DESC')->select('rondas.*')->paginate(10);
+            foreach ($query as $q) {
+                $q['id_encrypted'] = encrypt($q->id);
+                $q['entidad_nombre'] = Entidades::where('id', $q->entidad_id)->pluck('nombre')->first();
+                $q['fecha'] = date('d/m/Y H:i', strtotime($q->fecha_inicio));
+                $q['fecha_iniciada'] = date('d/m/Y H:i', strtotime($q->fecha_inicio_ronda));
+                $q['checkpoints'] = Checkpoints_Rondas::where('ronda_id', $q->id)->count();
+                $q['usuario'] = User::where('id', $q->usuario_id)->pluck('nombre')->first();
+                $q['estado_activa'] = ($q->activa == 1) ? 'Activa' : 'Inactiva';
+                $historial = [];
+                foreach(HistorialRondas::where('ronda_id', $q->id)->orderBy('id','ASC')->get() as $h) {
+                    $tipo = "normal";
+                    if($h->observacion) $tipo = "Incidencia";
+                    $historial[] = ['tipo' => $tipo, 'evento' => $h->evento,
+                    'observacion' => $h->observacion,'fecha' => date('d/m/Y H:i',strtotime($h->created_at))];
+                }
+                $q['historial'] = $historial;
+                $q['tipo'] = $q->tipo_ronda;
+            }
+          return $query;
+        }
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function create()
+    {
+        if(\Helper::auth()->perfil_id == 2) {
+
+            $miEntidad = \Helper::getMyEntidad();
+
+            $entidades = Entidades::join('user_entidades','user_entidades.entidad_id','entidades.id')
+            ->where('user_entidades.usuario_id', \Helper::auth()->id)->orderBy('entidades.nombre')
+            ->when($miEntidad, function ($query) use ($miEntidad) {
+                if($miEntidad == "Todas") return $query->where('user_entidades.entidad_id','>=',1);
+        
+                return $query->where('user_entidades.entidad_id', $miEntidad);
+            })
+            ->where('entidades.estado',1)
+            ->where('cliente_id', \Helper::getMyCliente())
+            ->select('entidades.*')->get();
+
+            $checkpoints = Checkpoints::where('cliente_id', \Helper::getMyCliente())->where('estado',1)->get();
+            $dispositivos = Dispositivos::where('cliente_id', \Helper::getMyCliente())->where('estado',1)->get();
+            return view('rondas.nuevo')->with(['checkpoints' => $checkpoints,'dispositivos' => $dispositivos,'entidades' => $entidades]);
+        }
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        $nombre = \Helper::capitalizeFirst($request->nombre,"1");
+        $entidad = $request->entidad;
+        $dispositivos = json_decode($request->dispositivos,true);
+        $dispositivos_data = json_decode($request->dispositivos_data,true);
+        $tipo = "QR";
+        $tipo_ronda = $request->tipo_ronda;
+        $inicio = $request->inicio;
+        $horainicio = $request->horainicio;
+        $tiempo_caducar = $request->tiempo_caducar;
+        $checkpoints = json_decode($request->checkpoints,TRUE);
+        $horaInicioManana = $request->horainicio_manana;
+
+        \Helper::setProgress("Registrando ronda. Espere por favor...");
+
+        $new = new Rondas;
+        $new->nombre = $nombre;
+        if($dispositivos[0] == 'Todos') {
+            $dispositivos_data2 = [];
+            foreach($dispositivos_data as $data) {
+                if($data['value'] != 'Todos') $dispositivos_data2[] = $data['value'];
+            }
+            $new->dispositivos_id = implode(',', $dispositivos_data2);
+        } else {
+            $new->dispositivos_id = implode(',', $dispositivos);
+        }
+
+        if($tipo_ronda == "Unica") {
+            $new->fecha_inicio = date('Y-m-d H:i:s',strtotime($inicio));
+        } else {
+            if(date('Hi',strtotime($horainicio)) <= date('Hi')) {
+                $new->fecha_inicio = date('Y-m-d H:i:s',strtotime(date('Y-m-d',strtotime('+1 day'))." ".$horainicio));
+            } else {
+                $new->fecha_inicio = date('Y-m-d H:i:s',strtotime(date('Y-m-d')." ".$horainicio));
+            }
+            
+            if($horaInicioManana) {
+                $new->hora_inicio_manana = 1;
+            } else {
+                $new->hora_inicio_manana = 0;
+            }
+        }
+        $new->usuario_id_owner = \Helper::auth()->id;
+        $new->estado = "Pendiente";
+        $new->cliente_id = \Helper::getMyCliente();
+        $new->entidad_id = $entidad;
+        $new->tipo = $tipo;
+        $new->tipo_ronda = $tipo_ronda;
+        $new->tiempo_caducar = $tiempo_caducar;
+        $new->save();
+
+        \Helper::newBitacora(\Helper::auth()->id,"Crear", "Ronda ".$new->nombre,"Web", $new->id);
+
+        $checkpoints_to_send = [];
+
+        foreach($checkpoints as $k=>$c) {
+            $check = Checkpoints::where('id',$c['point'])->first();
+
+            $newC = new Checkpoints_Rondas;
+            $newC->ronda_id = $new->id;
+            $newC->checkpoint_id = $c['point'];
+            $newC->time = $c['time'];
+            $newC->position = ($k + 1);
+            $newC->tipo = $check->tipo;
+            $newC->distance = $check->distance;
+            $newC->save();
+
+            $checkpoints_to_send[] = ['point' => $check->nombre,
+            'time' => $c['time'],
+            'position' => ($k+1),
+            'ubicacion' => $check->ubicacion,
+            'observacion' => $check->observacion,
+            'id' => $c['point'],
+            'id_c_r' => $newC->id,
+            'tipo' => $check->tipo,
+            'coords' => $check->coords,
+            'distance' => $check->distance,
+            'qr' => "R".$check->codigo_qr
+            ];
+        }
+
+         if($tipo_ronda == "Unica") {
+            foreach(explode(',', $new->dispositivos_id) as $d) {
+                $queryDispositivo = Dispositivos::where('id', $d)->first();
+
+                \Helper::setProgress("Enviando al dispositivo. Espere por favor...");
+                \Helper::sendSocket(json_encode(['tipo'=>'ronda','socket'=>$queryDispositivo->id_socket,
+                'fecha_inicio' => date('Y-m-d H:i:s',strtotime($inicio)),
+                'id' => $new->id,
+                'tipo_ronda' => 'Unica',
+                'tipo_r' => $tipo,
+                'nombre'=>$new->nombre,
+                'checkpoints' => $checkpoints_to_send,
+                'tiempo_caducidad' => $tiempo_caducar]));
+            }
+        }
+
+        \Helper::finProgress();
+        \Helper::registerFlash("Notificacion", "Ronda registrada con exito");
+        return response()->json(['estado' => 200]);
+    }
+
+    public function edit($id)
+    {
+        if(\Helper::auth()->perfil_id == 2) {
+            $exists_cp_desactivado = 0;
+            $cp_desactivados = [];
+
+            $ronda = Rondas::where('id', decrypt($id))->first();
+
+            $checkpoints = Checkpoints::where('cliente_id', \Helper::getMyCliente())->where('estado',1)
+            ->where('entidad_id',$ronda->entidad_id)->get();
+            $entidades = Entidades::join('user_entidades','user_entidades.entidad_id','entidades.id')
+            ->where('user_entidades.usuario_id', \Helper::auth()->id)->orderBy('entidades.nombre')
+            ->where('entidades.cliente_id', \Helper::getMyCliente())
+            ->where('entidades.estado',1)
+            ->select('entidades.*')->get();
+            
+            
+
+            $dispositivos = Dispositivos::where('entidad_id', $ronda->entidad_id)->get();
+
+            $checkpoints_ronda = Checkpoints_Rondas::where('ronda_id', $ronda->id)->get();
+            foreach($checkpoints_ronda as $c) {
+                $queryC = Checkpoints::where('id', $c->checkpoint_id)->first();
+                if($queryC->estado == 0) {
+                    $exists_cp_desactivado = 1;
+                    $cp_desactivados[] = $queryC->id;
+                }
+                $c['ubicacion'] = $queryC->ubicacion;
+                $c['tipo'] = $queryC->tipo;
+                $c['coords'] = $queryC->coords;
+                $c['codigo_qr'] = $queryC->codigo_qr;
+            }
+            return view('rondas.edit')->with(
+                [
+                    'checkpoints' => $checkpoints,
+                    'dispositivos' => $dispositivos,
+                    'ronda' => $ronda,
+                    'checkpoints_ronda' => $checkpoints_ronda,
+                    'entidades' => $entidades,
+                    'exists_cp_desactivado' => $exists_cp_desactivado,
+                    'cp_desactivados' => $cp_desactivados
+                ]);
+        }
+    }
+
+    public function update(Request $request) {
+        $nombre = \Helper::capitalizeFirst($request->nombre,"1");
+        $id_orig = $request->id_orig;
+        $entidad = $request->entidad;
+        $dispositivos = json_decode($request->dispositivos,true);
+        $dispositivos_data = json_decode($request->dispositivos_data,true);
+        $inicio = $request->inicio;
+        $horainicio = $request->horainicio;
+        $tiempo_caducar = $request->tiempo_caducar;
+        $checkpoints = json_decode($request->checkpoints,TRUE);
+
+        $queryDispositivosPrev = explode(',',Rondas::where('id', $id_orig)->pluck('dispositivos_id')->first());
+
+        \Helper::setProgress("Actualizando ronda. Espere por favor...");
+
+        $update = Rondas::find($id_orig);
+        $update->nombre = $nombre;
+        $update->entidad_id = $entidad;
+        if($update->tipo_ronda == "Unica") {
+            $update->fecha_inicio = date('Y-m-d H:i:s',strtotime($inicio));
+        } else {
+            $update->fecha_inicio = date('Y-m-d H:i:s',strtotime(date('Y-m-d')." ".$horainicio));
+        }
+        if($dispositivos[0] == 'Todos') {
+            $dispositivos_data2 = [];
+            foreach($dispositivos_data as $data) {
+                if($data['value'] != 'Todos') {
+                    $dispositivos_data2[] = $data['value'];
+                }
+            }
+            $update->dispositivos_id = implode(',', $dispositivos_data2);
+        } else {
+            $update->dispositivos_id = implode(',', $dispositivos);
+        }
+        $update->tiempo_caducar = $tiempo_caducar;
+        $update->save();
+
+        \Helper::newBitacora(\Helper::auth()->id,"Editar", "Ronda ".$update->nombre,"Web", $update->id);
+
+
+        $checkpoints_to_send = [];
+
+        $delete = Checkpoints_Rondas::where('ronda_id', $id_orig)->delete();
+
+        foreach($checkpoints as $k=>$c) {
+            $newC = new Checkpoints_Rondas;
+            $newC->ronda_id = $update->id;
+            $newC->checkpoint_id = $c['point'];
+            $newC->time = $c['time'];
+            $newC->position = ($k + 1);
+            $newC->save();
+
+            $check = Checkpoints::where('id',$c['point'])->first();
+
+            $checkpoints_to_send[] = ['point' => $check->nombre,
+            'time' => $c['time'],
+            'position' => ($k+1),
+            'ubicacion' => $check->ubicacion,
+            'observacion' => $check->observacion,
+            'id' => $c['point'],
+            'id_c_r' => $newC->id,
+            'tipo' => $check->tipo,
+            'qr' => $check->codigo_qr_string
+            ];
+        }
+
+        foreach($queryDispositivosPrev as $d) {
+            $queryDispositivo = Dispositivos::where('id', $d)->first();
+            \Helper::sendSocket(json_encode(['tipo'=>'delete_ronda','socket'=>$queryDispositivo->id_socket,
+            'id' => $id_orig,'tipo_ronda' => $update->tipo_ronda]));
+        }
+
+        if($update->tipo_ronda == "Unica") {
+
+            foreach(explode(',', $update->dispositivos_id) as $d) {
+                $queryDispositivo = Dispositivos::where('id', $d)->first();
+
+                \Helper::setProgress("Enviando al dispositivo. Espere por favor...");
+                \Helper::sendSocket(json_encode(['tipo'=>'ronda','socket'=>$queryDispositivo->id_socket,
+                'fecha_inicio' => date('Y-m-d H:i:s',strtotime($inicio)),
+                'id' => $update->id,
+                'tipo_ronda' => 'Unica',
+                'tipo_r' => "qr",
+                'nombre'=>$update->nombre,
+                'checkpoints' => $checkpoints_to_send,
+                'tiempo_caducidad' => $tiempo_caducar]));
+            }
+        }
+
+        \Helper::finProgress();
+        \Helper::registerFlash("Notificacion", "Ronda actualizada con exito");
+        return response()->json(['estado' => 200]);
+    }
+
+    public function iniciarRonda_api(Request $request) {
+        $dispositivo = $request->identificador;
+        $identificacion = $request->identificacion;
+        $contrasena = $request->contrasena;
+        $fecha = $request->fecha;
+        $coordenadas = $request->coordenadas;
+        $tipo_ronda = $request->tipo_ronda;
+        $ronda_id = $request->ronda_id;
+
+        $queryDispositivo = Dispositivos::where('identificador', $dispositivo)->where('estado',1)->first();
+        if(!$queryDispositivo) {
+            return response()->json(['estado' => 404 ,'mensaje' => "dispositivo no existe"]);
+        }
+
+        if(!$queryDispositivo->cliente_id) {
+            return response()->json(['estado' => 500 ,'mensaje' => "dispositivo no vinculado"]);
+        }
+
+        $queryCliente = Clientes::where('id', $queryDispositivo->cliente_id)->first();
+
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+
+        $queryEntidadx = Entidades::where('id', $queryDispositivo->entidad_id)->first();
+
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+
+        if($tipo_ronda == 'Diaria') {
+            $queryRonda = RondasPeriodicas::where('rondas_periodicas.id',$ronda_id)->where('rondas_periodicas.estado','!=','Finalizado')
+            ->join('rondas','rondas.id','rondas_periodicas.ronda_id')
+            ->select('rondas.dispositivo_id','rondas.entidad_id','rondas.cliente_id','rondas.usuario_id','rondas.id','rondas.dispositivos_id','rondas.estado')
+            ->first();
+        } else {
+            $queryRonda = Rondas::where('rondas.id',$ronda_id)->where('estado','!=','Finalizado')
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','rondas.dispositivos_id','rondas.estado')->first();
+        }
+
+        if(!$queryRonda || ($queryRonda && $queryRonda->estado != "Pendiente")) {
+            return response()->json(['estado' => 501,'mensaje' => "ronda no disponible"]);
+        }
+
+        if(!in_array($queryDispositivo->id,explode(',', $queryRonda->dispositivos_id))) {
+            return response()->json(['estado' => 501,'mensaje' => "ronda no disponible"]);
+        }
+
+        if($queryRonda->usuario_id) {
+            return response()->json(['estado' => 502,'mensaje' => "ronda iniciada",'usuario' => User::where('id',$queryRonda->usuario_id)->pluck('nombre')->first()]);
+        }
+
+        $queryUser = User::where('identificacion', $identificacion)->where('perfil_id',4)->first();
+        if(!$queryUser) {
+            return response()->json(['estado' => 405,'mensaje' => "usuario no existe"]);
+        }
+
+        if($queryUser->estado != 1) {
+            return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+        }
+
+        if(!Hash::check($contrasena, $queryUser->password)) {
+            return response()->json(['estado' => 503,'mensaje' => "usuario/contraseña no coinciden"]);
+        }
+
+        $queryEntidad = user_entidades::where('usuario_id', $queryUser->id)->where('entidad_id', $queryDispositivo->entidad_id)->first();
+        if(!$queryEntidad) {
+            return response()->json(['estado' => 504, 'mensaje' => "no pertenece a misma entidad/cliente"]);
+        }
+
+        $queryAsistencia = Asistencias::where('usuario_id', $queryUser->id)->where('entidad_id', $queryDispositivo->entidad_id)->orderBy('id','DESC')->first();
+        if(!$queryAsistencia || ($queryAsistencia && $queryAsistencia->fecha_salida)) {
+            return response()->json(['estado' => 505,'mensaje' => 'usuario sin asistencia marcada']);
+        }
+
+        $updateRonda = Rondas::find($queryRonda->id);
+        $updateRonda->usuario_id = $queryUser->id;
+        $updateRonda->fecha_inicio_ronda = date('Y-m-d H:i:s', strtotime($fecha));
+        $updateRonda->estado = "En curso";
+        $updateRonda->dispositivo_id = $queryDispositivo->id;
+        $updateRonda->save();
+
+        if($tipo_ronda == 'Diaria') {
+            $updateRonda2 = RondasPeriodicas::find($ronda_id);
+            $updateRonda2->usuario_id = $queryUser->id;
+            $updateRonda2->fecha_inicio_ronda = date('Y-m-d H:i:s', strtotime($fecha));
+            $updateRonda2->estado = "En curso";
+            $updateRonda2->dispositivo_id = $queryDispositivo->id;
+            $updateRonda2->save();
+
+            $newHistorial = new HistorialRondas;
+            $newHistorial->evento = "Inicio de ronda";
+            $newHistorial->usuario_id = $queryUser->id;
+            $newHistorial->ronda_periodica_id = $ronda_id;
+            $newHistorial->created_at = date('Y-m-d H:i:s', strtotime($fecha));
+            $newHistorial->coords = $coordenadas;
+            $newHistorial->save();
+        } else {
+            $newHistorial = new HistorialRondas;
+            $newHistorial->evento = "Inicio de ronda";
+            $newHistorial->usuario_id = $queryUser->id;
+            $newHistorial->ronda_id = $queryRonda->id;
+            $newHistorial->created_at = date('Y-m-d H:i:s', strtotime($fecha));
+            $newHistorial->coords = $coordenadas;
+            $newHistorial->save();
+        }
+
+        return response()->json(['estado' => 200,'usuario_id' => $queryUser->id,'nombre' => $queryUser->username]);
+    }
+
+    public function reportarCheckpoint(Request $request) {
+        $dispositivo = $request->identificador;
+        $ronda_id = $request->ronda;
+        $checkpoint_ronda = $request->checkpoint_ronda;
+        $fotos = json_decode($request->fotos, TRUE);
+        $observacion = ucfirst(strtolower($request->observacion));
+        $coordenadas = $request->coordenadas;
+        $tipo_ronda = $request->tipo_ronda;
+        $titulo = ucfirst(strtolower($request->titulo));
+
+        if($tipo_ronda == 'Diaria') {
+            $query = RondasPeriodicas::where('rondas_periodicas.id',$ronda_id)
+            ->join('rondas','rondas.id','rondas_periodicas.ronda_id')
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $dispositivo)
+            ->where('dispositivos.estado',1)
+            ->select('rondas.dispositivo_id','rondas.id','rondas.cliente_id','rondas.entidad_id', 'rondas.usuario_id','dispositivos.estado')->first();
+        } else {
+            $query = Rondas::where('rondas.id',$ronda_id)
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $dispositivo)
+            ->where('dispositivos.estado',1)
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','rondas.usuario_id','dispositivos.estado')->first();
+        }
+
+        if(!$query) {
+            return response()->json(['estado' => 404]);
+        }
+
+        $queryCliente = Clientes::where('id', $query->cliente_id)->first();
+
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+
+        $queryEntidadx = Entidades::where('id', $query->entidad_id)->first();
+
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+
+        $queryUser = User::where('id', $query->usuario_id)->first();
+
+        if($queryUser->estado != 1) {
+            return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+        }
+
+        $queryCheckpointRonda = Checkpoints_Rondas::where('id', $checkpoint_ronda)->first();
+        $checkpoint = Checkpoints::where('id', $queryCheckpointRonda->checkpoint_id)->first();
+
+        if($tipo_ronda == 'Diaria') {
+            $new = new HistorialRondas;
+            $new->titulo = $titulo;
+            $new->evento = "Incidencia en Checkpoint ".$checkpoint->nombre;
+            $new->usuario_id = $query->usuario_id;
+            $new->ronda_periodica_id = $ronda_id;
+            $new->checkpoint_ronda_id = $checkpoint_ronda;
+            $new->observacion = $observacion;
+            $new->coords = $coordenadas;
+            $new->save();
+
+        } else {
+            $new = new HistorialRondas;
+            $new->evento = "Incidencia en Checkpoint ".$checkpoint->nombre;
+            $new->usuario_id = $query->usuario_id;
+            $new->ronda_id = $ronda_id;
+            $new->checkpoint_ronda_id = $checkpoint_ronda;
+            $new->observacion = $observacion;
+            $new->coords = $coordenadas;
+            $new->save();
+
+            $updateRonda = Rondas::find($ronda_id);
+            $updateRonda->estado = "Incidencia";
+            $updateRonda->save();
+        }
+
+        $newIncidencia = new Incidencias;
+        $newIncidencia->titulo = $titulo;
+        if($tipo_ronda == 'Diaria') $newIncidencia->ronda_periodica_id = $ronda_id;
+        else $newIncidencia->ronda_id = $ronda_id;
+        $newIncidencia->usuario_id = $query->usuario_id;
+        $newIncidencia->checkpoint_ronda_id = $checkpoint_ronda;
+        $newIncidencia->observacion = $observacion;
+        $newIncidencia->coords = $coordenadas;
+        $newIncidencia->cliente_id = $query->cliente_id;
+        $newIncidencia->entidad_id = $query->entidad_id;
+        $newIncidencia->historial_id = $new->id;
+        $newIncidencia->save();
+
+        $fotos_array = [];
+
+        foreach($fotos as $image) {
+            $image = str_replace('data:image/jpeg;base64,', '', $image);
+            $image = str_replace(' ', '+', $image);
+            $base64 = base64_decode($image);
+            $imageName = str_replace(" ","",mb_substr($titulo,0,12)."_".date('Y_m_d_H_i_s').rand(10000000,99999999999999999).".jpg");
+
+            $diskPublic = Storage::build([
+                'driver' => 'local',
+                'root' => storage_path('app/public/incidencias'),
+            ]);
+
+            $diskPublic->put($imageName, $base64);
+
+            $newIncidenciaF = new FotosHistorialRondas;
+            $newIncidenciaF->historial_rondas_id = $new->id;
+            $newIncidenciaF->incidencia_id = $newIncidencia->id;
+            $newIncidenciaF->foto = "storage/incidencias/".$imageName;
+
+            $fotos_array[] = "http://sistema.controlrondas.com/storage/incidencias/".$imageName;
+
+            $newIncidenciaF->save();
+        }
+
+        $queryAdministradores = User::join('user_clientes','user_clientes.usuario_id','users.id')
+        ->where('user_clientes.cliente_id',$queryCliente->id)
+        ->where('users.perfil_id','2')->get();
+
+        foreach($queryAdministradores as $a) {
+            Mail::to($a->email)->send(new IncidenciaEmail($titulo,$observacion,$coordenadas,$fotos_array,$queryCliente->razon_social));
+        }
+
+        return response()->json(['estado' => 200]);
+
+    }
+
+    public function marcarCheckpoint(Request $request) {
+        $dispositivo = $request->identificador;
+        $ronda_id = $request->ronda;
+        $checkpoint_id = $request->checkpoint_id;
+        $username = $request->username;
+        $checkpoint_ronda = $request->checkpoint_ronda;
+        $coordenadas = $request->coordenadas;
+        $tipo_ronda = $request->tipo_ronda;
+
+        if($tipo_ronda == "Diaria") {
+            $query = RondasPeriodicas::where('rondas_periodicas.id',$ronda_id)
+            ->join('rondas','rondas.id','rondas_periodicas.ronda_id')
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $dispositivo)
+            ->where('dispositivos.estado',1)
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+        } else {
+            $query = Rondas::where('rondas.id',$ronda_id)
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $dispositivo)
+            ->where('dispositivos.estado',1)
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+        }
+
+        if(!$query) {
+            return response()->json(['estado' => 404]);
+        }
+
+        $queryCliente = Clientes::where('id', $query->cliente_id)->first();
+
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+
+        $queryEntidadx = Entidades::where('id', $query->entidad_id)->first();
+
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+
+        $queryUser = User::where('id',$query->usuario_id)->first();
+        if(!$queryUser) {
+            return response()->json(['estado' => 500]);
+        }
+
+            if($queryUser->estado != 1) {
+                return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+            }
+
+            $queryEntidad = user_entidades::where('entidad_id', $query->entidad_id)->where('usuario_id', $queryUser->id)->first();
+            if(!$queryEntidad) {
+                return response()->json(['estado' => 501]);
+            }
+            $this_check = Checkpoints_Rondas::where('id', $checkpoint_ronda)->first();
+            $checkpoint = Checkpoints::where('id',$this_check->checkpoint_id)->pluck('nombre')->first();
+
+            $checkpoints_to = Checkpoints_Rondas::where('ronda_id', $query->id)->get();
+            $checkpoints0 = Checkpoints_Rondas::where('ronda_id', $query->id)->where('checked',0)->get();
+            $is_last = 0;
+            $is_first = 0;
+
+            if($checkpoints0->count() == $checkpoints_to->count()) $is_first = 1;
+            if($checkpoints0->count() == 1) $is_last = 1;
+
+            if($tipo_ronda == "Diaria") {
+                $new = new HistorialRondas;
+                $new->evento = "Checkpoint Marcado. QR Leido en : ".$checkpoint;
+                $new->usuario_id = $queryUser->id;
+                $new->ronda_periodica_id = $ronda_id;
+                $new->checkpoint_ronda_id = $checkpoint_ronda;
+                $new->coords = $coordenadas;
+                $new->save();
+            } else {
+                $new = new HistorialRondas;
+                $new->evento = "Checkpoint Marcado. QR Leido en : ".$checkpoint;
+                $new->usuario_id = $queryUser->id;
+                $new->ronda_id = $ronda_id;
+                $new->checkpoint_ronda_id = $checkpoint_ronda;
+                $new->coords = $coordenadas;
+                $new->save();
+            }
+
+            if($is_first == 1) {
+                $updateRonda = Rondas::find($query->id);
+                $updateRonda->estado = "En curso";
+                $updateRonda->save();
+
+                if($tipo_ronda == 'Diaria') {
+                    $updateRonda2 = RondasPeriodicas::find($ronda_id);
+                    $updateRonda2->estado = "En curso";
+                    $updateRonda2->save();
+                }
+            }
+
+            if($is_last == 1) {
+                if($tipo_ronda == "Diaria") {
+                    $new = new HistorialRondas;
+                    $new->evento = "Ronda finalizada";
+                    $new->usuario_id = $queryUser->id;
+                    $new->ronda_periodica_id = $ronda_id;
+                    $new->coords = $coordenadas;
+                    $new->save();
+
+                    $updateRonda = Rondas::find($query->id);
+                    $updateRonda->estado = "Finalizado";
+                    $updateRonda->fecha_termino = date('Y-m-d H:i:s');
+                    $updateRonda->save();
+
+                    $updateRonda2 = RondasPeriodicas::find($ronda_id);
+                    $updateRonda2->estado = "Finalizado";
+                    $updateRonda2->fecha_termino = date('Y-m-d H:i:s');
+                    $updateRonda2->save();
+
+                } else {
+                    $new = new HistorialRondas;
+                    $new->evento = "Ronda finalizada";
+                    $new->usuario_id = $queryUser->id;
+                    $new->ronda_id = $ronda_id;
+                    $new->coords = $coordenadas;
+                    $new->save();
+
+                    $updateRonda = Rondas::find($query->id);
+                    $updateRonda->estado = "Finalizado";
+                    $updateRonda->fecha_termino = date('Y-m-d H:i:s');
+                    $updateRonda->save();
+                }
+            }
+
+            $updateCheckpoint = Checkpoints_Rondas::find($checkpoint_ronda);
+            $updateCheckpoint->checked = 1;
+            $updateCheckpoint->save();
+
+            return response()->json(['estado' => 200]);
+
+    }
+
+    public function marcarCheckpointGeo(Request $request) {
+        $dispositivo = $request->identificador;
+        $ronda_id = $request->ronda;
+        $checkpoint_id = $request->checkpoint_id;
+        $username = $request->username;
+        $checkpoint_ronda = $request->checkpoint_ronda;
+        $coordenadas = $request->coordenadas;
+        $tipo_ronda = $request->tipo_ronda;
+
+        if($tipo_ronda == "Diaria") {
+            $query = RondasPeriodicas::where('rondas_periodicas.id',$ronda_id)
+            ->join('rondas','rondas.id','rondas_periodicas.ronda_id')
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $dispositivo)
+            ->where('dispositivos.estado',1)
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+        } else {
+            $query = Rondas::where('rondas.id',$ronda_id)
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $dispositivo)
+            ->where('dispositivos.estado',1)
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+        }
+
+        if(!$query) {
+            return response()->json(['estado' => 404]);
+        }
+
+        $queryCliente = Clientes::where('id', $query->cliente_id)->first();
+
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+
+        $queryEntidadx = Entidades::where('id', $query->entidad_id)->first();
+
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+
+        $queryUser = User::where('id',$query->usuario_id)->first();
+        if(!$queryUser) {
+            return response()->json(['estado' => 500]);
+        }
+
+            if($queryUser->estado != 1) {
+                return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+            }
+
+            $queryEntidad = user_entidades::where('entidad_id', $query->entidad_id)->where('usuario_id', $queryUser->id)->first();
+            if(!$queryEntidad) {
+                return response()->json(['estado' => 501]);
+            }
+            $this_check = Checkpoints_Rondas::where('id', $checkpoint_ronda)->first();
+            $checkpoint = Checkpoints::where('id',$this_check->checkpoint_id)->pluck('nombre')->first();
+
+            $checkpoints_to = Checkpoints_Rondas::where('ronda_id', $query->id)->get();
+            $checkpoints0 = Checkpoints_Rondas::where('ronda_id', $query->id)->where('checked',0)->get();
+            $is_last = 0;
+            $is_first = 0;
+
+            if($checkpoints0->count() == $checkpoints_to->count()) $is_first = 1;
+            if($checkpoints0->count() == 1) $is_last = 1;
+
+            if($checkpoints0->count() >= 1) {
+
+            if($tipo_ronda == "Diaria") {
+                $new = new HistorialRondas;
+                $new->evento = "Checkpoint Marcado. GEO Leido en : ".$checkpoint;
+                $new->usuario_id = $queryUser->id;
+                $new->ronda_periodica_id = $ronda_id;
+                $new->checkpoint_ronda_id = $checkpoint_ronda;
+                $new->coords = $coordenadas;
+                $new->save();
+            } else {
+                $new = new HistorialRondas;
+                $new->evento = "Checkpoint Marcado. GEO Leido en : ".$checkpoint;
+                $new->usuario_id = $queryUser->id;
+                $new->ronda_id = $ronda_id;
+                $new->checkpoint_ronda_id = $checkpoint_ronda;
+                $new->coords = $coordenadas;
+                $new->save();
+            }
+
+            if($is_first == 1) {
+                $updateRonda = Rondas::find($query->id);
+                $updateRonda->estado = "En curso";
+                $updateRonda->save();
+
+                if($tipo_ronda == 'Diaria') {
+                    $updateRonda2 = RondasPeriodicas::find($ronda_id);
+                    $updateRonda2->estado = "En curso";
+                    $updateRonda2->save();
+                }
+            }
+
+            if($is_last == 1) {
+                if($tipo_ronda == "Diaria") {
+                    $new = new HistorialRondas;
+                    $new->evento = "Ronda finalizada";
+                    $new->usuario_id = $queryUser->id;
+                    $new->ronda_periodica_id = $ronda_id;
+                    $new->coords = $coordenadas;
+                    $new->save();
+
+                    $updateRonda = Rondas::find($query->id);
+                    $updateRonda->estado = "Finalizado";
+                    $updateRonda->fecha_termino = date('Y-m-d H:i:s');
+                    $updateRonda->save();
+
+                    $updateRonda2 = RondasPeriodicas::find($ronda_id);
+                    $updateRonda2->estado = "Finalizado";
+                    $updateRonda2->fecha_termino = date('Y-m-d H:i:s');
+                    $updateRonda2->save();
+
+                } else {
+                    $new = new HistorialRondas;
+                    $new->evento = "Ronda finalizada";
+                    $new->usuario_id = $queryUser->id;
+                    $new->ronda_id = $ronda_id;
+                    $new->coords = $coordenadas;
+                    $new->save();
+
+                    $updateRonda = Rondas::find($query->id);
+                    $updateRonda->estado = "Finalizado";
+                    $updateRonda->fecha_termino = date('Y-m-d H:i:s');
+                    $updateRonda->save();
+                }
+            }
+
+            $updateCheckpoint = Checkpoints_Rondas::find($checkpoint_ronda);
+            $updateCheckpoint->checked = 1;
+            $updateCheckpoint->save();
+        }
+
+            return response()->json(['estado' => 200]);
+
+    }
+
+    public function desdeCheckpoint(Request $request) {
+        $rut = $request->rut;
+        $identificador = $request->identificador;
+        $contrasena = $request->contrasena;
+
+        $queryDispositivo = Dispositivos::where('identificador', $identificador)->first();
+        if(!$queryDispositivo) {
+            return response()->json(['estado' => 404]);
+        }
+
+        $queryUser = User::where('identificacion', $rut)->where('perfil_id',4)->first();
+        if(!$queryUser) {
+            return response()->json(['estado' => 405,'mensaje' => "usuario no existe"]);
+        }
+
+        $queryEntidad = user_entidades::where('usuario_id', $queryUser->id)->where('entidad_id', $queryDispositivo->entidad_id)->first();
+        if(!$queryEntidad) {
+            return response()->json(['estado' => 500,'mensaje' => "usuario no existe en la entidad"]);
+        }
+
+        if(!Hash::check($contrasena, $queryUser->password)) {
+            return response()->json(['estado' => 501,'mensaje' => "contrasena erronea"]);
+        }
+
+        return response()->json(['estado' => 200,'username' => $queryUser->username,'id' => $queryUser->id]);
+
+    }
+
+    public function primerAtraso(Request $request) {
+        $dispositivo = $request->identificador;
+        $ronda_id = $request->ronda;
+
+        $query = Rondas::where('rondas.id',$ronda_id)
+        ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')
+        ->where('dispositivos.estado',1)->where('dispositivos.identificador', $dispositivo)->first();
+
+        if(!$query)
+        return response()->json(['estado' => 404]);
+
+        $queryUsers = user_entidades::where('entidad_id', $query->entidad_id)
+        ->join('users','users.id','user_entidades.usuario_id')->where('users.estado', 1)
+        ->select('users.*')->get();
+        foreach($queryUsers as $u) {
+            $newNotificacion = new Notificaciones;
+            $newNotificacion->usuario_id = $u->id;
+            $newNotificacion->tipo = "Primer Atraso";
+            $newNotificacion->entidad_id = $query->entidad_id;
+            $newNotificacion->cliente_id = $query->cliente_id;
+            $newNotificacion->plataforma = "Web";
+            $newNotificacion->titulo = "Ronda con Primer Atraso";
+            $newNotificacion->mensaje = "Ronda atrasada en dispositivo ".$dispositivo;
+            $newNotificacion->id_to = $ronda_id;
+            $newNotificacion->save();
+
+            \Helper::sendWeb(json_encode(['tipo'=>'notificacion','usuario_id'=>$u->id,'titulo' => $newNotificacion->titulo,'mensaje' => $newNotificacion->mensaje, 'id' => $newNotificacion->id, 'fecha' => date('d/m/Y H:i:s',strtotime($newNotificacion->created_at))]));
+        }
+
+        return response()->json(['estado' => 200]);
+    }
+
+    public function segundoAtraso(Request $request) {
+        $dispositivo = $request->identificador;
+        $ronda_id = $request->ronda;
+
+        $query = Rondas::where('rondas.id',$ronda_id)
+        ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')
+        ->where('dispositivos.identificador', $dispositivo)
+        ->where('dispositivos.estado',1)->first();
+
+        if(!$query)
+        return response()->json(['estado' => 404]);
+
+        $queryUsers = user_entidades::where('entidad_id', $query->entidad_id)
+        ->join('users','users.id','user_entidades.usuario_id')->where('users.estado', 1)
+        ->select('users.*')->get();
+        foreach($queryUsers as $u) {
+            $newNotificacion = new Notificaciones;
+            $newNotificacion->usuario_id = $u->id;
+            $newNotificacion->tipo = "Segundo Atraso";
+            $newNotificacion->entidad_id = $query->entidad_id;
+            $newNotificacion->cliente_id = $query->cliente_id;
+            $newNotificacion->plataforma = "Web";
+            $newNotificacion->titulo = "Ronda con Segundo Atraso";
+            $newNotificacion->mensaje = "Ronda atrasada en dispositivo ".$dispositivo;
+            $newNotificacion->id_to = $ronda_id;
+            $newNotificacion->save();
+        }
+
+        return response()->json(['estado' => 200]);
+    }
+
+    public function caducarRonda(Request $request) {
+        $evento = $request->evento;
+        $tipo_ronda = $request->tipo_ronda;
+        $fecha = $request->fecha;
+        $coordenadas = $request->coordenadas;
+        $dispositivo = $request->dispositivo;
+        $id_ronda = $request->ronda_id;
+        $id_checkpoint = $request->id_checkpoint;
+
+        if($tipo_ronda == "Diaria") {
+            $query = RondasPeriodicas::where('rondas_periodicas.id',$id_ronda)
+            ->join('rondas','rondas.id','rondas_periodicas.ronda_id')
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $dispositivo)
+            ->where('dispositivos.estado',1)
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+        } else {
+            $query = Rondas::where('rondas.id',$id_ronda)
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $dispositivo)
+            ->where('dispositivos.estado',1)
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+        }
+
+        if(!$query) return response()->json(['estado' => 404]);
+
+        $queryCliente = Clientes::where('id', $query->cliente_id)->first();
+
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+
+        $queryEntidadx = Entidades::where('id', $query->entidad_id)->first();
+
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+
+        $this_check = Checkpoints_Rondas::where('id', $id_checkpoint)->first();
+        if($this_check) $checkpoint = Checkpoints::where('id',$this_check->checkpoint_id)->pluck('nombre')->first();
+
+        $updateRonda = Rondas::find($query->id);
+        $updateRonda->estado = "Caducada";
+        $updateRonda->fecha_termino = date('Y-m-d H:i:s');
+        $updateRonda->save();
+
+        if($tipo_ronda == "Diaria") {
+            $new = new HistorialRondas;
+            if($evento == 'Checkpoint no marcado') {
+                $new->evento = "Tiempo caducado en Checkpoint : ".$checkpoint;
+                $new->checkpoint_ronda_id = $id_checkpoint;
+                $new->usuario_id = $query->usuario_id;
+            }
+            if($evento == 'Sin iniciar') $new->evento = "Ronda con tiempo caducado";
+            $new->ronda_periodica_id = $id_ronda;
+            $new->coords = $coordenadas;
+            $new->save();
+
+            $updateRonda2 = RondasPeriodicas::find($id_ronda);
+            $updateRonda2->estado = "Caducada";
+            $updateRonda2->fecha_termino = date('Y-m-d H:i:s');
+            $updateRonda2->save();
+
+        } else {
+            $new = new HistorialRondas;
+            if($evento == 'Checkpoint no marcado') {
+                $new->evento = "Tiempo caducado en Checkpoint : ".$checkpoint;
+                $new->checkpoint_ronda_id = $id_checkpoint;
+                $new->usuario_id = $query->usuario_id;
+            }
+            if($evento == 'Sin iniciar') $new->evento = "Ronda con tiempo caducado";
+            $new->ronda_id = $id_ronda;
+            $new->coords = $coordenadas;
+            $new->save();
+        }
+
+        return response()->json(['estado' => 200]);
+
+    }
+
+    public function desactivar(Request $request) {
+        $id = $request->id;
+
+        $query = Rondas::where('id', $id)->first();
+
+        $update = Rondas::find($id);
+        if($query->activa == 1) {
+            $update->activa = 0;
+            $message = "Ronda desactivada con exito";
+            \Helper::newBitacora(\Helper::auth()->id,"Desactivar", "Ronda ".$update->nombre,"Web", $update->id);
+
+            if($query->tipo_ronda == 'Unica') {
+                $fecha_to_compare = date('Y-m-d H:i', strtotime($query->fecha_inicio));
+            } else {
+                $fecha_to_compare = date('Y-m-d H:i', strtotime(date('Y-m-d').' '.date('H:i',strtotime($query->fecha_inicio))));
+            }
+            if($fecha_to_compare > date('Y-m-d H:i')) {
+                foreach(explode(',', $query->dispositivos_id) as $d) {
+                    $queryDispositivo = Dispositivos::where('id', $d)->first();
+                    \Helper::sendSocket(json_encode(['tipo'=>'delete_ronda','socket'=>$queryDispositivo->id_socket,
+                    'id' => $id,'tipo_ronda' => $query->tipo_ronda]));
+                }
+            }
+        } else {
+            $update->activa = 1;
+            $message = "Ronda desactivada con exito";
+            \Helper::newBitacora(\Helper::auth()->id,"Desactivar", "Ronda ".$update->nombre,"Web", $update->id);
+
+            $checkpoints_to_send = [];
+            $checkpoints = Checkpoints_Rondas::where('ronda_id')->orderBy('position','ASC')->get();
+            foreach($checkpoints as $k=>$c) {
+                $check = Checkpoints::where('id',$c['point'])->first();
+
+                $checkpoints_to_send[] = ['point' => $check->nombre,
+                'time' => $c['time'],
+                'position' => $c['position'],
+                'ubicacion' => $check->ubicacion,
+                'observacion' => $check->observacion,
+                'id' => $c['point'],
+                'id_c_r' => $c->id,
+                'tipo' => $check->tipo,
+                'qr' => $check->codigo_qr_string
+                ];
+            }
+            if($query->tipo_ronda == 'Unica') {
+                $fecha_to_inicio = date('Y-m-d H:i', strtotime($query->fecha_inicio));
+            } else {
+                $fecha_to_inicio = date('Y-m-d H:i', strtotime(date('Y-m-d').' '.date('H:i',strtotime($query->fecha_inicio))));
+            }
+            foreach(explode(',', $query->dispositivos_id) as $d) {
+                $queryDispositivo = Dispositivos::where('id', $d)->first();
+
+                \Helper::sendSocket(json_encode(['tipo'=>'ronda','socket'=>$queryDispositivo->id_socket,
+                'fecha_inicio' => $fecha_to_inicio,
+                'id' => $query->id,
+                'tipo_ronda' => $query->tipo_ronda,
+                'tipo_r' => "qr",
+                'nombre'=>$query->nombre,
+                'checkpoints' => $checkpoints_to_send,
+                'tiempo_caducidad' => $query->tiempo_caducar]));
+            }
+        }
+        $update->save();
+
+        return response()->json(['message'=>$message,'estado'=>200]);
+    }
+
+
+    /* AQUI VA PARTE DE HISTORIAL */
+    /* AQUI VA PARTE DE HISTORIAL */
+    /* AQUI VA PARTE DE HISTORIAL */
+
+    public function indexHistorial() {
+        if(\Helper::auth()->perfil_id == 1 || \Helper::auth()->perfil_id == 2 || \Helper::auth()->perfil_id == 3) {
+            return view('rondas.historial.index');
+        }
+    }
+
+    public function getDataHistorial(Request $request) {
+        $today = date('Y-m-d H:i:s');
+        $client = $request->client;
+
+        $client = Clientes::where('razon_social', 'LIKE' , '%'.$client.'%')->first();
+        $client = $client->id;
+
+        $entity = $request->entity;
+        $entity = Entidades::where('nombre', 'LIKE' , '%'.$entity.'%')->first();
+        $entity = $entity->id;
+
+        $name = $request->name;
+
+        $date_range = $request->date;
+        $date_array = explode(" to ", $date_range);
+        $start_date = date('Y-d-m 00:00:00', strtotime(date('d/m/Y',strtotime($date_array[0]))));
+        $end_date = date('Y-d-m 23:59:59', strtotime(date('d/m/Y',strtotime($date_array[0]))));
+        $state = $request->estado;
+
+
+        if(\Helper::auth()->perfil_id == 1) {
+            $rondas_unicas = Rondas::where('tipo_ronda', 'Unica')
+            ->join('entidades','entidades.id','rondas.entidad_id')
+            ->join('clientes','clientes.id','rondas.cliente_id')
+            ->leftJoin('dispositivos','dispositivos.id','rondas.dispositivo_id')
+            ->leftJoin('users','users.id','rondas.usuario_id')
+            ->where('rondas.fecha_inicio','<=', Carbon::now())
+            ->when($request->client, function ($query) use ($client) {
+                return $query->where('rondas.cliente_id', '=', $client);
+            })
+            ->when($request->entity, function ($query) use ($entity) {
+                return $query->where('rondas.entidad_id', '=', $entity);
+            })
+            ->when($request->name, function ($query) use ($name) {
+                return $query->where('rondas.nombre', 'LIKE', '%'.$name.'%');
+            })
+            ->when($request->date, function ($query) use ($request) {
+                if(strpos($request->date, " to ") !== false) {
+                    $date_array = explode(" to ", $request->date);
+                    $explodeDate = explode("/",$date_array[0]);
+                    $explodeDate2 = explode("/",$date_array[1]);
+                    $start_date = date('Y-m-d 00:00:00', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                    $end_date = date('Y-m-d 23:59:59', strtotime($explodeDate2[2]."-".$explodeDate2[1]."-".$explodeDate2[0]));
+                } else {
+                    $explodeDate = explode("/",$request->date);
+        
+                    $start_date = date('Y-m-d 00:00:00', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                    $end_date = date('Y-m-d 23:59:59', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                }
+                
+                $between = [$start_date, $end_date];
+                return $query->whereBetween('rondas.fecha_inicio', $between);
+            })
+            ->when($request->estado, function ($query) use ($state) {
+                return $query->where('rondas.estado', 'LIKE', '%'.$state.'%');
+            })
+            ->selectRaw(
+                'rondas.tipo_ronda,
+                rondas.id,
+                rondas.nombre,
+                rondas.estado,
+                DATE_FORMAT(rondas.fecha_inicio,"%d-%m-%Y %H:%i") as fecha_inicio,
+                DATE_FORMAT(rondas.fecha_inicio_ronda,"%d-%m-%Y %H:%i") as fecha_inicio_ronda,
+                DATE_FORMAT(rondas.fecha_termino,"%d-%m-%Y %H:%i") fecha_termino,
+                dispositivos.id as dispositivoid,
+                dispositivos.nombre as dispositivonombre,
+                dispositivos.identificador as dispositivoidentificador,
+                users.id as usuarioid,
+                users.nombre as usuarionombre,
+                users.username as usuariousername,
+                rondas.created_at,
+                entidades.nombre as entidadnombre,
+                clientes.razon_social as clienterazonsocial,
+                DATE_FORMAT(rondas.updated_at,"%d-%m-%Y %H:%i") as updated_at'
+                );
+
+            $rondas_diarias = RondasPeriodicas::where('tipo_ronda', 'Diaria')
+            ->join('rondas','rondas.id','rondas_periodicas.ronda_id')
+            ->join('entidades','entidades.id','rondas.entidad_id')
+            ->join('clientes','clientes.id','rondas.cliente_id')
+            ->leftJoin('dispositivos','dispositivos.id','rondas.dispositivo_id')
+            ->leftJoin('users','users.id','rondas.usuario_id')
+            ->where('rondas.fecha_inicio','<=', Carbon::now())
+            ->when($request->client, function ($query) use ($client) {
+                return $query->where('rondas.cliente_id', '=', $client);
+            })
+            ->when($request->entity, function ($query) use ($entity) {
+                return $query->where('rondas.entidad_id', '=', $entity);
+            })
+            ->when($request->name, function ($query) use ($name) {
+                return $query->where('rondas.nombre', 'LIKE', '%'.$name.'%');
+            })
+            ->when($request->date, function ($query) use ($request) {
+                if(strpos($request->date, " to ") !== false) {
+                    $date_array = explode(" to ", $request->date);
+                    $explodeDate = explode("/",$date_array[0]);
+                    $explodeDate2 = explode("/",$date_array[1]);
+                    $start_date = date('Y-m-d 00:00:00', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                    $end_date = date('Y-m-d 23:59:59', strtotime($explodeDate2[2]."-".$explodeDate2[1]."-".$explodeDate2[0]));
+                } else {
+                    $explodeDate = explode("/",$request->date);
+        
+                    $start_date = date('Y-m-d 00:00:00', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                    $end_date = date('Y-m-d 23:59:59', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                }
+                
+                $between = [$start_date, $end_date];
+                return $query->whereBetween('rondas.fecha_inicio', $between);
+            })
+            ->when($request->estado, function ($query) use ($state) {
+                return $query->where('rondas.estado', 'LIKE', '%'.$state.'%');
+            })
+            ->selectRaw(
+                'rondas.tipo_ronda,
+                rondas_periodicas.id,
+                rondas.nombre,
+                rondas_periodicas.estado,
+                DATE_FORMAT(rondas.fecha_inicio,"%d-%m-%Y %H:%i") as fecha_inicio,
+                DATE_FORMAT(rondas.fecha_inicio_ronda,"%d-%m-%Y %H:%i") as fecha_inicio_ronda,
+                DATE_FORMAT(rondas.fecha_termino,"%d-%m-%Y %H:%i") as fecha_termino,
+                dispositivos.id as dispositivoid,
+                dispositivos.nombre as dispositivonombre,
+                dispositivos.identificador as dispositivoidentificador,
+                users.id as usuarioid,
+                users.nombre as usuarionombre,
+                users.username as usuariousername,
+                rondas_periodicas.created_at,
+                entidades.nombre as entidadnombre,
+                clientes.razon_social as clienterazonsocial,
+                rondas_periodicas.updated_at'
+                )
+            ->union($rondas_unicas)->orderBy('updated_at','ASC')->paginate(25);
+
+        } else if(\Helper::auth()->perfil_id == 2 || \Helper::auth()->perfil_id == 3) {
+            $miEntidad = \Helper::getMyEntidad();
+
+            $rondas_unicas = Rondas::where('tipo_ronda', 'Unica')
+            ->join('entidades','entidades.id','rondas.entidad_id')
+            ->join('clientes','clientes.id','rondas.cliente_id')
+            ->leftJoin('dispositivos','dispositivos.id','rondas.dispositivo_id')
+            ->leftJoin('users','users.id','rondas.usuario_id')
+            ->where('rondas.fecha_inicio','<=', Carbon::now())
+            ->where('rondas.cliente_id', \Helper::getMyCliente())
+            ->when($miEntidad, function ($query) use ($miEntidad) {
+                if($miEntidad == "Todas") return $query->where('rondas.entidad_id','>=',1);
+
+                return $query->where('rondas.entidad_id', $miEntidad);
+            })
+            ->when($request->client, function ($query) use ($client) {
+                return $query->where('rondas.cliente_id', '=', $client);
+            })
+            ->when($request->entity, function ($query) use ($entity) {
+                return $query->where('rondas.entidad_id', '=', $entity);
+            })
+            ->when($request->name, function ($query) use ($name) {
+                return $query->where('rondas.nombre', 'LIKE', '%'.$name.'%');
+            })
+            ->when($request->date, function ($query) use ($request) {
+                if(strpos($request->date, " to ") !== false) {
+                    $date_array = explode(" to ", $request->date);
+                    $explodeDate = explode("/",$date_array[0]);
+                    $explodeDate2 = explode("/",$date_array[1]);
+                    $start_date = date('Y-m-d 00:00:00', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                    $end_date = date('Y-m-d 23:59:59', strtotime($explodeDate2[2]."-".$explodeDate2[1]."-".$explodeDate2[0]));
+                } else {
+                    $explodeDate = explode("/",$request->date);
+        
+                    $start_date = date('Y-m-d 00:00:00', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                    $end_date = date('Y-m-d 23:59:59', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                }
+                
+                $between = [$start_date, $end_date];
+                return $query->whereBetween('rondas.fecha_inicio', $between);
+            })
+            ->when($request->estado, function ($query) use ($state) {
+                return $query->where('rondas.estado', 'LIKE', '%'.$state.'%');
+            })
+            ->selectRaw(
+                'rondas.tipo_ronda,
+                rondas.id,
+                rondas.nombre,
+                rondas.estado,
+                DATE_FORMAT(rondas.fecha_inicio,"%d-%m-%Y %H:%i") as fecha_inicio,
+                DATE_FORMAT(rondas.fecha_inicio_ronda,"%d-%m-%Y %H:%i") as fecha_inicio_ronda,
+                DATE_FORMAT(rondas.fecha_termino,"%d-%m-%Y %H:%i") as fecha_termino,
+                dispositivos.id as dispositivoid,
+                dispositivos.nombre as dispositivonombre,
+                dispositivos.identificador as dispositivoidentificador,
+                users.id as usuarioid,
+                users.nombre as usuarionombre,
+                users.username as usuariousername,
+                DATE_FORMAT(rondas.created_at,"%d-%m-%Y %H:%i") as created_at,
+                entidades.nombre as entidadnombre,
+                clientes.razon_social as clienterazonsocial,
+                DATE_FORMAT(rondas.updated_at, "%d-%m-%Y %H:%i") as updated_at'
+                );
+
+            $rondas_diarias = RondasPeriodicas::where('tipo_ronda', 'Diaria')
+            ->join('rondas','rondas.id','rondas_periodicas.ronda_id')
+            ->join('entidades','entidades.id','rondas.entidad_id')
+            ->join('clientes','clientes.id','rondas.cliente_id')
+            ->leftJoin('dispositivos','dispositivos.id','rondas.dispositivo_id')
+            ->leftJoin('users','users.id','rondas.usuario_id')
+            ->where('rondas.fecha_inicio','<=', Carbon::now())
+            ->where('rondas.cliente_id', \Helper::getMyCliente())
+            ->when($miEntidad, function ($query) use ($miEntidad) {
+                if($miEntidad == "Todas") return $query->where('rondas.entidad_id','>=',1);
+
+                return $query->where('rondas.entidad_id', $miEntidad);
+            })
+            ->when($request->client, function ($query) use ($client) {
+                return $query->where('rondas.cliente_id', '=', $client);
+            })
+            ->when($request->entity, function ($query) use ($entity) {
+                return $query->where('rondas.entidad_id', '=', $entity);
+            })
+            ->when($request->name, function ($query) use ($name) {
+                return $query->where('rondas.nombre', 'LIKE', '%'.$name.'%');
+            })
+            ->when($request->date, function ($query) use ($request) {
+                if(strpos($request->date, " to ") !== false) {
+                    $date_array = explode(" to ", $request->date);
+                    $explodeDate = explode("/",$date_array[0]);
+                    $explodeDate2 = explode("/",$date_array[1]);
+                    $start_date = date('Y-m-d 00:00:00', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                    $end_date = date('Y-m-d 23:59:59', strtotime($explodeDate2[2]."-".$explodeDate2[1]."-".$explodeDate2[0]));
+                } else {
+                    $explodeDate = explode("/",$request->date);
+        
+                    $start_date = date('Y-m-d 00:00:00', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                    $end_date = date('Y-m-d 23:59:59', strtotime($explodeDate[2]."-".$explodeDate[1]."-".$explodeDate[0]));
+                }
+                
+                $between = [$start_date, $end_date];
+                return $query->whereBetween('rondas.fecha_inicio', $between);
+            })
+            ->when($request->estado, function ($query) use ($state) {
+                return $query->where('rondas.estado', 'LIKE', '%'.$state.'%');
+            })
+            ->selectRaw(
+                'rondas.tipo_ronda,
+                rondas_periodicas.id,
+                rondas.nombre,
+                rondas_periodicas.estado,
+                DATE_FORMAT(rondas.fecha_inicio,"%d-%m-%Y %H:%i") as fecha_inicio,
+                DATE_FORMAT(rondas.fecha_inicio_ronda,"%d-%m-%Y %H:%i") as fecha_inicio_ronda,
+                DATE_FORMAT(rondas.fecha_termino,"%d-%m-%Y %H:%i") as fecha_termino,
+                dispositivos.id as dispositivoid,
+                dispositivos.nombre as dispositivonombre,
+                dispositivos.identificador as dispositivoidentificador,
+                users.id as usuarioid,
+                users.nombre as usuarionombre,
+                users.username as usuariousername,
+                DATE_FORMAT(rondas_periodicas.created_at,"%d-%m-%Y %H:%i") as created_at,
+                entidades.nombre as entidadnombre,
+                clientes.razon_social as clienterazonsocial,
+                DATE_FORMAT(rondas_periodicas.updated_at,"%d-%m-%Y %H:%i") as updated_at'
+                )
+            ->union($rondas_unicas)->orderBy('id','ASC')->paginate(25);
+        }
+
+        $rondas = $rondas_diarias;
+
+        foreach($rondas as $r) {
+            $historial = [];
+            if($r->tipo_ronda == 'Unica') {
+                $queryHistorial = HistorialRondas::where('ronda_id', $r->id)->orderBy('id','ASC')->get();
+
+                
+            } else {
+                $queryHistorial = HistorialRondas::where('ronda_periodica_id', $r->id)->orderBy('id','ASC')->get();
+            }
+            
+
+            // Mostrando info en el frontend
+            $tiempo = 'Minutos';
+
+            foreach($queryHistorial as $h) {
+                if($h->evento == "Ronda finalizada") $r['fecha_termino'] = date('d-m-Y H:i',strtotime($h->created_at));
+
+                // Calcular el tiempo entre fechas de inicio y final.
+                if (isset($r['fecha_inicio_ronda'])) {
+                    $fechaInicio = Carbon::createFromFormat('d-m-Y H:i', $r['fecha_inicio_ronda']);
+                
+                    if (isset($r['fecha_termino'])) {
+                        $fechaTermino = Carbon::createFromFormat('d-m-Y H:i', $r['fecha_termino']);
+                        $diferenciaTiempo = $fechaInicio->diffInMinutes($fechaTermino);
+                    } else {
+                        $diferenciaTiempo = 0;
+                    }
+                
+                    $r['tiempo_entre_fechas'] = $diferenciaTiempo;
+                }
+                
+
+
+                $tipo = "normal";
+                if($h->observacion) $tipo = "Incidencia";
+                $isOmmited = Checkpoints_Rondas::where('id',$h->checkpoint_ronda_id)->where('ommited',1)->first();
+                $observacion = $h->observacion;
+                if($isOmmited) {
+                    $tipo = "Omitir";
+                    $observacion = $isOmmited->motivo;
+                }
+                $historial[] = ['tipo' => $tipo, 'evento' => $h->evento,
+                'observacion' => $observacion,'fecha' => date('d/m/Y H:i',strtotime($h->created_at))];
+            }
+            $r['historial'] = $historial;
+            $r['tiempo'] = $tiempo;
+            //$r['tempo'] = $tempo;
+        }
+
+        return $rondas;
+    }
+
+
+    /* FIN AQUI VA PARTE DE HISTORIAL */
+    /* FIN AQUI VA PARTE DE HISTORIAL */
+    /* FIN AQUI VA PARTE DE HISTORIAL */
+
+    public function iniciarRondaVoluntaria_api(Request $request) {
+        $identificacion = $request->identificacion;
+        $contrasena = $request->contrasena;
+        $identificador = $request->identificador;
+        $fecha = $request->fecha;
+        $coordenadas = $request->coordenadas;
+        $id_ronda = $request->id_ronda;
+
+        $queryDispositivo = Dispositivos::where('identificador', $identificador)->where('estado',1)->first();
+        if(!$queryDispositivo) {
+            return response()->json(['estado' => 404 ,'mensaje' => "dispositivo no existe"]);
+        }
+
+        if(!$queryDispositivo->cliente_id) {
+            return response()->json(['estado' => 500 ,'mensaje' => "dispositivo no vinculado"]);
+        }
+
+        $queryCliente = Clientes::where('id', $queryDispositivo->cliente_id)->first();
+
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+
+        $queryEntidadx = Entidades::where('id', $queryDispositivo->entidad_id)->first();
+
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+
+        $queryUser = User::where('identificacion', $identificacion)->where('perfil_id',4)->first();
+        if(!$queryUser) {
+            return response()->json(['estado' => 405,'mensaje' => "usuario no existe"]);
+        }
+
+        if($queryUser->estado != 1) {
+            return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+        }
+
+        if(!Hash::check($contrasena, $queryUser->password)) {
+            return response()->json(['estado' => 503,'mensaje' => "usuario/contraseña no coinciden"]);
+        }
+
+        $new = new Rondas;
+        $new->nombre = "Ronda voluntaria Dispositivo ".$queryDispositivo->nombre;
+        $new->dispositivo_id = $queryDispositivo->id;
+        $new->fecha_inicio = date('Y-m-d H:i:s', strtotime($fecha));
+        $new->usuario_id = $queryUser->id;
+        $new->usuario_id_owner = $queryUser->id;
+        $new->created_at = date('Y-m-d H:i:s', strtotime($fecha));
+        $new->fecha_inicio_ronda = date('Y-m-d H:i:s', strtotime($fecha));
+        $new->cliente_id = $queryDispositivo->cliente_id;
+        $new->entidad_id = $queryDispositivo->entidad_id;
+        $new->estado = "En curso";
+        $new->tipo = "QR";
+        $new->tipo_ronda = "Unica";
+        $new->dispositivos_id = $queryDispositivo->id;
+        $new->tiempo_caducar = 120;
+        $new->activa = 1;
+        $new->save();
+
+        $newHistorial = new HistorialRondas;
+        $newHistorial->evento = "Inicio de ronda";
+        $newHistorial->usuario_id = $queryUser->id;
+        $newHistorial->ronda_id = $new->id;
+        $newHistorial->created_at = date('Y-m-d H:i:s', strtotime($fecha));
+        $newHistorial->coords = $coordenadas;
+        $newHistorial->save();
+
+        $queryPreviousRonda = RondasPeriodicas::where('id',$id_ronda)->first();
+
+        $queryCheckpoints = Checkpoints_Rondas::where('ronda_id', $queryPreviousRonda->ronda_id)->orderBy('position','ASC')->get();
+        foreach($queryCheckpoints as $k=>$c) {
+            $check = Checkpoints::where('id',$c->checkpoint_id)->first();
+
+            $newC = new Checkpoints_Rondas;
+            $newC->ronda_id = $new->id;
+            $newC->checkpoint_id = $c->checkpoint_id;
+            $newC->time = $c->time;
+            $newC->position = ($k + 1);
+            $newC->tipo = $check->tipo;
+            $newC->distance = $check->distance;
+            $newC->save();
+        }
+
+        return response()->json(['estado' => 200,'id'=> $new->id,'id_ronda'=>$id_ronda]);
+    }
+
+    public function marcarCheckpointGeoV_api(Request $request) {
+        $identificador = $request->identificador;
+        $ronda = $request->ronda;
+        $checkpoint_id = $request->checkpoint_ronda;
+        $coordenadas = $request->coordenadas;
+
+        $query = Rondas::where('rondas.id',$ronda)
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $identificador)
+            ->where('dispositivos.estado',1)
+            ->where('rondas.estado','En curso')
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+    
+        if(!$query) {
+            return response()->json(['estado' => 404]);
+        }
+    
+        $queryCliente = Clientes::where('id', $query->cliente_id)->first();
+    
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+    
+        $queryEntidadx = Entidades::where('id', $query->entidad_id)->first();
+    
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+    
+        $queryUser = User::where('id',$query->usuario_id)->first();
+        if(!$queryUser) {
+            return response()->json(['estado' => 500]);
+        }
+    
+        if($queryUser->estado != 1) {
+            return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+        }
+    
+        $queryEntidad = user_entidades::where('entidad_id', $query->entidad_id)->where('usuario_id', $queryUser->id)->first();
+        if(!$queryEntidad) {
+            return response()->json(['estado' => 501]);
+        }
+
+        $last_checkpoint = Checkpoints_Rondas::where('ronda_id',$ronda)->where('checked',0)->orderBy('position','ASC')->first();
+
+        $checkpoint = Checkpoints::where('id',$checkpoint_id)->pluck('nombre')->first();
+
+        if($last_checkpoint) {
+            $update_last_cp = Checkpoints_Rondas::find($last_checkpoint->id);
+            $update_last_cp->checked = 1;
+            $update_last_cp->save();
+        }
+
+        $new = new HistorialRondas;
+        $new->evento = "Checkpoint Marcado. GEO Leido en : ".$checkpoint;
+        $new->usuario_id = $queryUser->id;
+        $new->ronda_id = $ronda;
+        $new->checkpoint_ronda_id = $checkpoint_ronda->id;
+        $new->coords = $coordenadas;
+        $new->save();
+
+        $updateRonda = Rondas::find($ronda);
+        $updateRonda->estado = "En curso";
+        $updateRonda->fecha_termino = date('Y-m-d H:i:s');
+        $updateRonda->save();
+
+        return response()->json(['estado' => 200]);
+    }
+
+    public function marcarCheckpointQRV_api(Request $request) {
+        $identificador = $request->identificador;
+        $ronda = $request->ronda;
+        $checkpoint_id = $request->checkpoint_ronda;
+        $coordenadas = $request->coordenadas;
+        $fecha_hora_cp = $request->fecha_hora_cp;
+
+        $query = Rondas::where('rondas.id',$ronda)
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $identificador)
+            ->where('dispositivos.estado',1)
+            ->where('rondas.estado','!=','Finalizado')
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+    
+        if(!$query) {
+            return response()->json(['estado' => 404]);
+        }
+    
+        $queryCliente = Clientes::where('id', $query->cliente_id)->first();
+    
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+    
+        $queryEntidadx = Entidades::where('id', $query->entidad_id)->first();
+    
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+    
+        $queryUser = User::where('id',$query->usuario_id)->first();
+        if(!$queryUser) {
+            return response()->json(['estado' => 500]);
+        }
+    
+        if($queryUser->estado != 1) {
+            return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+        }
+    
+        $queryEntidad = user_entidades::where('entidad_id', $query->entidad_id)->where('usuario_id', $queryUser->id)->first();
+        if(!$queryEntidad) {
+            return response()->json(['estado' => 501]);
+        }
+
+        $last_checkpoint = Checkpoints_Rondas::where('ronda_id',$ronda)->where('checked',0)->orderBy('position','ASC')->first();
+
+        $checkpoint = Checkpoints::where('id',$checkpoint_id)->pluck('nombre')->first();
+
+       if($last_checkpoint) {
+        $update_last_cp = Checkpoints_Rondas::find($last_checkpoint->id);
+        $update_last_cp->checked = 1;
+        $update_last_cp->save();
+       }
+
+        $new = new HistorialRondas;
+        $new->evento = "Checkpoint Marcado. QR Leido en : ".$checkpoint;
+        $new->usuario_id = $queryUser->id;
+        $new->ronda_id = $ronda;
+        $new->checkpoint_ronda_id = $last_checkpoint->id;
+        $new->coords = $coordenadas;
+        $new->save();
+
+        $updateRonda = Rondas::find($ronda);
+        $updateRonda->estado = "En curso";
+        $updateRonda->fecha_termino = (empty($request->fecha_hora_cp)) ? date('Y-m-d H:i:s') : $fecha_hora_cp;
+        $updateRonda->save();
+
+        return response()->json(['estado' => 200]);
+    }
+
+    public function reportarCheckpointV(Request $request) {
+        $identificador = $request->identificador;
+        $ronda = $request->ronda;
+        $fotos = json_decode($request->fotos, TRUE);
+        $observacion = ucfirst(strtolower($request->observacion));
+        $coordenadas = $request->coordenadas;
+        $titulo = ucfirst(strtolower($request->titulo));
+
+        $query = Rondas::where('rondas.id',$ronda)
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $identificador)
+            ->where('dispositivos.estado',1)
+            ->where('rondas.estado','!=','Finalizado')
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+
+        if(!$query) {
+            return response()->json(['estado' => 404]);
+        }
+
+        $queryCliente = Clientes::where('id', $query->cliente_id)->first();
+
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+
+        $queryEntidadx = Entidades::where('id', $query->entidad_id)->first();
+
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+
+        $queryUser = User::where('id', $query->usuario_id)->first();
+
+        if($queryUser->estado != 1) {
+            return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+        }
+
+        $new = new HistorialRondas;
+        $new->evento = "Incidencia en Ronda";
+        $new->usuario_id = $query->usuario_id;
+        $new->ronda_id = $ronda;
+        $new->observacion = $observacion;
+        $new->coords = $coordenadas;
+        $new->save();
+
+        $updateRonda = Rondas::find($ronda);
+        $updateRonda->estado = "Incidencia";
+        $updateRonda->save();
+
+        $newIncidencia = new Incidencias;
+        $newIncidencia->titulo = $titulo;
+        $newIncidencia->ronda_id = $ronda;
+        $newIncidencia->usuario_id = $query->usuario_id;
+        $newIncidencia->observacion = $observacion;
+        $newIncidencia->coords = $coordenadas;
+        $newIncidencia->cliente_id = $query->cliente_id;
+        $newIncidencia->entidad_id = $query->entidad_id;
+        $newIncidencia->historial_id = $new->id;
+        $newIncidencia->save();
+
+        $fotos_array = [];
+
+        foreach($fotos as $image) {
+            $image = str_replace('data:image/jpeg;base64,', '', $image);
+            $image = str_replace(' ', '+', $image);
+            $base64 = base64_decode($image);
+            $imageName = str_replace(" ","",mb_substr($titulo,0,12)."_".date('Y_m_d_H_i_s').rand(10000000,99999999999999999).".jpg");
+
+            $diskPublic = Storage::build([
+                'driver' => 'local',
+                'root' => storage_path('app/public/incidencias'),
+            ]);
+
+            $diskPublic->put($imageName, $base64);
+
+            $newIncidenciaF = new FotosHistorialRondas;
+            $newIncidenciaF->historial_rondas_id = $new->id;
+            $newIncidenciaF->incidencia_id = $newIncidencia->id;
+            $newIncidenciaF->foto = "storage/incidencias/".$imageName;
+
+            $fotos_array[] = "http://sistema.controlrondas.com/storage/incidencias/".$imageName;
+
+            $newIncidenciaF->save();
+        }
+
+        $queryAdministradores = User::join('user_clientes','user_clientes.usuario_id','users.id')
+        ->where('user_clientes.cliente_id',$queryCliente->id)
+        ->where('users.perfil_id','2')->get();
+
+        foreach($queryAdministradores as $a) {
+            Mail::to($a->email)->send(new IncidenciaEmail($titulo,$observacion,$coordenadas,$fotos_array,$queryCliente->razon_social));
+        }
+
+        return response()->json(['estado' => 200]);
+
+    }
+
+    public function finalizarVoluntaria_api(Request $request) {
+        $identificador = $request->identificador;
+        $ronda = $request->ronda;
+        $coordenadas = $request->coordenadas;
+        $fecha_hora_cp = $request->fecha_hora_cp;
+
+        $query = Rondas::where('rondas.id',$ronda)
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $identificador)
+            ->where('dispositivos.estado',1)
+            ->where('rondas.estado','!=','Finalizado')
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+    
+        if(!$query) {
+            return response()->json(['estado' => 404]);
+        }
+    
+        $queryCliente = Clientes::where('id', $query->cliente_id)->first();
+    
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+    
+        $queryEntidadx = Entidades::where('id', $query->entidad_id)->first();
+    
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+    
+        $queryUser = User::where('id',$query->usuario_id)->first();
+        if(!$queryUser) {
+            return response()->json(['estado' => 500]);
+        }
+    
+        if($queryUser->estado != 1) {
+            return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+        }
+    
+        $queryEntidad = user_entidades::where('entidad_id', $query->entidad_id)->where('usuario_id', $queryUser->id)->first();
+        if(!$queryEntidad) {
+            return response()->json(['estado' => 501]);
+        }
+
+        $cps = Checkpoints_Rondas::where('ronda_id',$ronda)->where('checked',0)->orderBy('position','ASC')->get();
+        foreach($cps as $c) {
+            $update_last_cp = Checkpoints_Rondas::find($c->id);
+            $update_last_cp->checked = 1;
+            $update_last_cp->ommited = 1;
+            $update_last_cp->motivo = "Ronda finalizada manualmente";
+            $update_last_cp->save();
+
+            $checkpoint = Checkpoints::where('id',$c->checkpoint_id)->pluck('nombre')->first();
+
+            $newH = new HistorialRondas;
+            $newH->evento = "Checkpoint omitido en : ".$checkpoint;
+            $newH->usuario_id = $queryUser->id;
+            $newH->ronda_id = $ronda;
+            $newH->checkpoint_ronda_id = $c->id;
+            $newH->coords = $coordenadas;
+            $newH->save();
+        }
+
+        $new = new HistorialRondas;
+        $new->evento = "Ronda finalizada";
+        $new->usuario_id = $queryUser->id;
+        $new->ronda_id = $ronda;
+        $new->coords = $coordenadas;
+        $new->save();
+
+        $updateRonda = Rondas::find($ronda);
+        $updateRonda->estado = "Finalizado";
+        $updateRonda->fecha_termino = (empty($request->fecha_hora_cp)) ? date('Y-m-d H:i:s') : $fecha_hora_cp;
+        $updateRonda->save();
+
+        return response()->json(['estado'=>200]);
+    }
+
+    public function omitirCheckpoint_api(Request $request) {
+        $identificador = $request->identificador;
+        $id_ronda = $request->id_ronda;
+        $id_checkpoint = $request->id_checkpoint;
+        $id_cp_r = $request->id_cp_r;
+        $tipo_ronda = $request->tipo_ronda;
+        $coordenadas = $request->coordenadas;
+        $motivo = $request->motivo;
+
+        if($tipo_ronda == "Diaria") {
+            $query = RondasPeriodicas::where('rondas_periodicas.id',$id_ronda)
+            ->join('rondas','rondas.id','rondas_periodicas.ronda_id')
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $identificador)
+            ->where('dispositivos.estado',1)
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+        } else {
+            $query = Rondas::where('rondas.id',$id_ronda)
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $identificador)
+            ->where('dispositivos.estado',1)
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+        }
+    
+        if(!$query) {
+            return response()->json(['estado' => 404]);
+        }
+    
+        $queryCliente = Clientes::where('id', $query->cliente_id)->first();
+    
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+    
+        $queryEntidadx = Entidades::where('id', $query->entidad_id)->first();
+    
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+    
+        $queryUser = User::where('id',$query->usuario_id)->first();
+        if(!$queryUser) {
+            return response()->json(['estado' => 500]);
+        }
+    
+        if($queryUser->estado != 1) {
+            return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+        }
+    
+        $queryEntidad = user_entidades::where('entidad_id', $query->entidad_id)->where('usuario_id', $queryUser->id)->first();
+        if(!$queryEntidad) {
+            return response()->json(['estado' => 501]);
+        }
+
+        $this_check = Checkpoints_Rondas::where('id', $id_cp_r)->first();
+        $checkpoint = Checkpoints::where('id',$this_check->checkpoint_id)->pluck('nombre')->first();
+
+        $checkpoints_to = Checkpoints_Rondas::where('ronda_id', $query->id)->get();
+        $checkpoints0 = Checkpoints_Rondas::where('ronda_id', $query->id)->where('checked',0)->get();
+        $is_last = 0;
+        $is_first = 0;
+
+        if($checkpoints0->count() == $checkpoints_to->count()) $is_first = 1;
+        if($checkpoints0->count() == 1) $is_last = 1;
+
+        if($tipo_ronda == "Diaria") {
+            $new = new HistorialRondas;
+            $new->evento = "Checkpoint omitido en : ".$checkpoint;
+            $new->usuario_id = $queryUser->id;
+            $new->ronda_periodica_id = $id_ronda;
+            $new->checkpoint_ronda_id = $id_cp_r;
+            $new->coords = $coordenadas;
+            $new->save();
+        } else {
+            $new = new HistorialRondas;
+            $new->evento = "Checkpoint omitido en : ".$checkpoint;
+            $new->usuario_id = $queryUser->id;
+            $new->ronda_id = $id_ronda;
+            $new->checkpoint_ronda_id = $id_cp_r;
+            $new->coords = $coordenadas;
+            $new->save();
+        }
+
+        if($is_first == 1) {
+            $updateRonda = Rondas::find($query->id);
+            $updateRonda->estado = "En curso";
+            $updateRonda->save();
+
+            if($tipo_ronda == 'Diaria') {
+                $updateRonda2 = RondasPeriodicas::find($id_ronda);
+                $updateRonda2->estado = "En curso";
+                $updateRonda2->save();
+            }
+        }
+
+        if($is_last == 1) {
+            if($tipo_ronda == "Diaria") {
+                $new = new HistorialRondas;
+                $new->evento = "Ronda finalizada";
+                $new->usuario_id = $queryUser->id;
+                $new->ronda_periodica_id = $id_ronda;
+                $new->coords = $coordenadas;
+                $new->save();
+
+                $updateRonda = Rondas::find($query->id);
+                $updateRonda->estado = "Finalizado";
+                $updateRonda->fecha_termino = date('Y-m-d H:i:s');
+                $updateRonda->save();
+
+                $updateRonda2 = RondasPeriodicas::find($id_ronda);
+                $updateRonda2->estado = "Finalizado";
+                $updateRonda2->fecha_termino = date('Y-m-d H:i:s');
+                $updateRonda2->save();
+
+            } else {
+                $new = new HistorialRondas;
+                $new->evento = "Ronda finalizada";
+                $new->usuario_id = $queryUser->id;
+                $new->ronda_id = $id_ronda;
+                $new->coords = $coordenadas;
+                $new->save();
+
+                $updateRonda = Rondas::find($query->id);
+                $updateRonda->estado = "Finalizado";
+                $updateRonda->fecha_termino = date('Y-m-d H:i:s');
+                $updateRonda->save();
+            }
+        }
+
+        $updateCheckpoint = Checkpoints_Rondas::find($id_cp_r);
+        $updateCheckpoint->checked = 1;
+        $updateCheckpoint->ommited = 1;
+        $updateCheckpoint->motivo = $motivo;
+        $updateCheckpoint->save();
+
+        return response()->json(['estado' => 200]);
+    }
+
+    public function omitirCheckpointV_api(Request $request) {
+        $identificador = $request->identificador;
+        $id_ronda = $request->id_ronda;
+        $id_checkpoint = $request->id_checkpoint;
+        $coordenadas = $request->coordenadas;
+        $motivo = $request->motivo;
+
+        $query = Rondas::where('rondas.id',$id_ronda)
+            ->join('dispositivos','dispositivos.id','rondas.dispositivo_id')->where('dispositivos.identificador', $identificador)
+            ->where('dispositivos.estado',1)
+            ->where('rondas.estado','!=','Finalizado')
+            ->select('rondas.cliente_id','rondas.entidad_id','rondas.dispositivo_id','rondas.id','dispositivos.estado','rondas.usuario_id')->first();
+    
+        if(!$query) {
+            return response()->json(['estado' => 404]);
+        }
+    
+        $queryCliente = Clientes::where('id', $query->cliente_id)->first();
+    
+        if($queryCliente->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin cliente activo']);
+        }
+    
+        $queryEntidadx = Entidades::where('id', $query->entidad_id)->first();
+    
+        if($queryEntidadx->estado == 0) {
+            return response()->json(['estado' => 402, 'mensaje' => 'sin entidad activa']);
+        }
+    
+        $queryUser = User::where('id',$query->usuario_id)->first();
+        if(!$queryUser) {
+            return response()->json(['estado' => 500]);
+        }
+    
+        if($queryUser->estado != 1) {
+            return response()->json(['estado' => 403,'mensaje' => "usuario inactivo"]);
+        }
+    
+        $queryEntidad = user_entidades::where('entidad_id', $query->entidad_id)->where('usuario_id', $queryUser->id)->first();
+        if(!$queryEntidad) {
+            return response()->json(['estado' => 501]);
+        }
+
+        $last_checkpoint = Checkpoints_Rondas::where('ronda_id',$id_ronda)->where('checked',0)->orderBy('position','ASC')->first();
+
+        $checkpoint = Checkpoints::where('id',$id_checkpoint)->pluck('nombre')->first();
+
+       if($last_checkpoint) {
+        $update_last_cp = Checkpoints_Rondas::find($last_checkpoint->id);
+        $update_last_cp->checked = 1;
+        $update_last_cp->ommited = 1;
+        $update_last_cp->motivo = $motivo;
+        $update_last_cp->save();
+       }
+
+        $new = new HistorialRondas;
+        $new->evento = "Checkpoint omitido en : ".$checkpoint;
+        $new->usuario_id = $queryUser->id;
+        $new->ronda_id = $id_ronda;
+        $new->checkpoint_ronda_id = $last_checkpoint->id;
+        $new->coords = $coordenadas;
+        $new->save();
+
+        $updateRonda = Rondas::find($id_ronda);
+        $updateRonda->estado = "En curso";
+        $updateRonda->fecha_termino = date('Y-m-d H:i:s');
+        $updateRonda->save();
+
+        return response()->json(['estado' => 200]);
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  \App\Models\Rondas  $rondas
+     * @return \Illuminate\Http\Response
+     */
+    public function show(Rondas $rondas)
+    {
+        //
+    }
+
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  \App\Models\Rondas  $rondas
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy(Rondas $rondas)
+    {
+        //
+    }
+
+    public function descargarReporteRonda(Request $request) {
+        $tipo = $request->tipo;
+        $id = $request->id;
+        if($tipo == "Unica") {
+            $query = Rondas::where('rondas.id',$id)
+            ->join('entidades','entidades.id','rondas.entidad_id')
+            ->join('clientes','clientes.id','rondas.cliente_id')
+            ->leftJoin('users','users.id','rondas.usuario_id')
+            ->leftJoin('dispositivos','dispositivos.id','rondas.dispositivo_id')
+            ->selectRaw(
+                'rondas.tipo_ronda,
+                rondas.id,
+                rondas.nombre,
+                rondas.estado,
+                DATE_FORMAT(rondas.fecha_inicio,"%d/%m/%Y %H:%i") as fecha_inicio,
+                DATE_FORMAT(rondas.fecha_inicio_ronda,"%d/%m/%Y %H:%i") fecha_inicio_ronda,
+                DATE_FORMAT(rondas.fecha_termino,"%d/%m/%Y %H:%i") fecha_termino,
+                dispositivos.id as dispositivoid,
+                dispositivos.nombre as dispositivonombre,
+                dispositivos.identificador as dispositivoidentificador,
+                users.id as usuarioid,
+                users.nombre as usuarionombre,
+                users.username as usuariousername,
+                rondas.created_at,
+                entidades.nombre as entidadnombre,
+                clientes.razon_social as clienterazonsocial,
+                clientes.logo,
+                rondas.updated_at'
+            )
+            ->first();
+        } else {
+            $query = RondasPeriodicas::where('rondas_periodicas.id',$id)
+            ->join('entidades','entidades.id','rondas.entidad_id')
+            ->join('clientes','clientes.id','rondas.cliente_id')
+            ->leftJoin('dispositivos','dispositivos.id','rondas.dispositivo_id')
+            ->leftJoin('users','users.id','rondas.usuario_id')
+            ->join('rondas','rondas.id','rondas_periodicas.ronda_id')
+            ->selectRaw(
+                'rondas.tipo_ronda,
+                rondas.id,
+                rondas.nombre,
+                rondas.estado,
+                DATE_FORMAT(rondas.fecha_inicio,"%d/%m/%Y %H:%i") as fecha_inicio,
+                DATE_FORMAT(rondas.fecha_inicio_ronda,"%d/%m/%Y %H:%i") fecha_inicio_ronda,
+                DATE_FORMAT(rondas.fecha_termino,"%d/%m/%Y %H:%i") fecha_termino,
+                dispositivos.id as dispositivoid,
+                dispositivos.nombre as dispositivonombre,
+                dispositivos.identificador as dispositivoidentificador,
+                users.id as usuarioid,
+                users.nombre as usuarionombre,
+                users.username as usuariousername,
+                rondas.created_at,
+                entidades.nombre as entidadnombre,
+                clientes.razon_social as clienterazonsocial,
+                clientes.logo,
+                rondas.updated_at'
+            )
+            ->first();
+        }
+
+        $historial = [];
+        if($query->tipo_ronda == 'Unica') {
+
+            // Modificacion de la hora de inicio y termino de la ronda en el Reporte
+            $query->fecha_inicio_ronda = date('d-m-Y H:i',strtotime($query->created_at));
+            $query->fecha_termino = date('d-m-Y H:i',strtotime($query->updated_at));
+
+            $queryHistorial = HistorialRondas::where('ronda_id', $query->id)->orderBy('id','ASC')->get();
+        } else {
+
+            // Modificacion de la hora de inicio y termino de la ronda en el Reporte
+            $query->fecha_inicio_ronda = date('d-m-Y H:i',strtotime($query->created_at));
+            $query->fecha_termino = date('d-m-Y H:i',strtotime($query->updated_at));
+
+            $queryHistorial = HistorialRondas::where('ronda_periodica_id', $query->id)->orderBy('id','ASC')->get();
+        }
+
+        // Calcular el tiempo entre fechas de inicio y final.
+        if (isset($query->fecha_inicio_ronda)) {
+            $fechaInicio = Carbon::createFromFormat('d-m-Y H:i', $query->fecha_inicio_ronda);
+        
+            if (isset($query->fecha_termino)) {
+                $fechaTermino = Carbon::createFromFormat('d-m-Y H:i', $query->fecha_termino);
+                $diferenciaTiempo = $fechaInicio->diffInMinutes($fechaTermino);
+            } else {
+                $diferenciaTiempo = 0;
+            }
+        
+            $query['tiempo_entre_fechas'] = $diferenciaTiempo;
+        }
+
+        $historial_ronda = [];
+
+
+        foreach($queryHistorial as $h) {
+            $tipo = "normal";
+            if($h->observacion) $tipo = "Incidencia";
+            $isOmmited = Checkpoints_Rondas::where('id',$h->checkpoint_ronda_id)->where('ommited',1)->first();
+            $observacion = $h->observacion;
+            if($isOmmited) {
+                $tipo = "Omitir";
+                $observacion = $isOmmited->motivo;
+            }
+            $historial[] = ['tipo' => $tipo, 'evento' => $h->evento,
+            'observacion' => $observacion,'fecha' => date('d/m/Y H:i',strtotime($h->created_at))];
+        }
+        $query['historial'] = $historial;
+
+        $clientelogo = $query->logo;
+        $rondas = [];
+        $rondas[] = $query;
+
+        return PDF::loadView('pdf.reporteRonda', ['rondas'=>$rondas,'clientelogo'=>$clientelogo,'milogo'=>asset('images/logo/controlrondas_80.png')])
+        ->setPaper('a4', 'portrait')
+        ->stream("ss".'.pdf');
+    }
+}
+

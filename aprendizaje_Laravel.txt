@@ -1,0 +1,242 @@
+
+
+Paginas para poder ver los mejores lenguajes de programacion.
+    Stack Overflow Developer Survey
+    GitHub Octoverse
+    W3Techs
+    BuiltWith
+
+
+*****************************************************************************************
+
+Resource: Representa a ese dato que queremos obtener de nuestra base de datos, y esta mal modificar metodo a metodo lo que deceamos mostrar el recurso debe estar aislado.
+
+php artisan make:resource CategoryResource
+
+*****************************************************************************************
+
+Collection: 
+
+php artisan make:controller PagesController --resource --model=Page
+
+gestor-goeat: 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
+
+ucfirst(): Esta funcion en factory permite que la primera letra de una palabra sea Mayuscula,
+
+
+Request: Se refiere a las solicitudes o petciones HTTP que realiza el usuario atravez del navegador.
+
+request(): crea una nueva instancia de la clase Illuminate/Http/Request;
+request()->url(): devuelve la url actual
+request()->is('/') ? 'active' : '': El is() pregunta si es la misma utl q le pasamos por parametro	 en la url pone el nombre de la url no el de la ruta.
+
+Si solo se va usar la el Request en un metodo, se inyecta directamente en ese metodo, sino se genera desde un constructor, creando una variable protegida y accediendo con el $this->request.
+
+Tambien podemos verificar si un campo esta lleno o no, con la { $request->has('nombre del campo')
+
+Hay un objeto q esta disponible en todas las vistas llamado: {errors->first('nombre-campo)}
+
+Hay una funcion llamada: { old('nombre-campo') }, para q a la hora de enviar el formulario, los demas campos q estan llenos si se le da enviar no se pierda el valor que se ingreso anteriormente
+
+Si quieres ver las opciones de validacion disponibles en laravel entra a: {laravel.com/docs/validation = Avaliable Validation Rules}.
+
+Para imprimir html como estructura cambiamos la sintaxis de blade {{}} esta por esta {!! !!}.
+
+php artisan make:request CreateMessageRequest: Comando para crear reglas de validacion de un formulario. Crea una carpeta en Http llamada REQUEST, para inyectarla en el controlador q recibe los datos del formulario es de la siguiente manera: {
+
+	use App\Http\Requests\CreateMessageRequest as RequestsCreateMessageRequ	est; 
+	public funtion form(RequestsCreateMessageRequest $request){
+	
+	}
+}
+
+Los responses o respuestas son las respuestas que da el servidor: Si retornamos un String(), automaticamente lo convierte en una respuesta http, si retornamos un array de array los onvierte un objeto de JSON multidimensional.
+
+Tenemos la funcion {
+	response(contenido de la respuesta, status, array de cabeceras)
+		return response('Contenido de la respuesta', 201)
+                      ->header('X_TOKEN', 'secret-token')
+                      ->header('X_TOKEN2', 'secret-token2')
+                      ->cookie('X_COOKIE', 'cookie');
+                     
+                     $data = $request->all();
+        		return response()->json(['data' => $data], 202);
+	       }
+	      
+	      
+La funcion redirect recibe un por parametro una ruta, pero si le puedes pasar el nombre de una ruta. {
+	redirect(ruta)
+	redirect()->route(nombre ruta);
+}
+
+Para utilizar sesiones para enviar mensajes utilizamos la funcion con el metodo {with('llave', 'mensaje')}, exsiste otro metodo llamado {back()} te retorna a la vista anterior. 
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Los MiddleWare: Son algo asi como un guardian, una capa que intercepta las peticiones del usuario y verifica que cumpla sus reglas y en caso de q estas regla no se cumpla la peticion es terminada.
+
+Para crear un middleware necesitas crearlo con el comando php artisan make:middleware 'nombre', y necesitas agregarlo al kernel para que el middleware sea reconocido. Lo puedes agregar en los middleware globales o en las rutas.
+
+Luego lo puedes aplicar en las rutas seguido de la ruta con la funcion middleware('nombre') o desde el controlador, poniendolo en el constructor, pero se aplican a todos los metodos del controlador, si queremos añadirselo a una ruta completa lo puedes hacer con lo siguiente.
+
+{$this->middleware('nombre', ['only' => ['nombremetodo']])} only significa solo, si ponemos solo 'except' se le aplica a todos menos a ese metodo.
+
+PROTECCION DE RUTAS CON MIDDLEWARE.
+Los Middleware son mecanismos que no permiten filtrar e inspeccionar las peticiones entrantes de nuestra aplicacion.
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+Las Migraciones son como un control de version para bases de datos que nos permite facilmente modificarlas y compartirlas.
+
+Comando para crear un modelo con migraciones. {php artisan make:model (nombre) -m}
+
+el comando {php artisan migration} ejecuta el metodo up().
+El comando {php artisan migration:rollback} ejecuta el metodo down().
+El comando {php artisan make:migration create_messages_table} Nos crea una nueva migracion.
+
+Si queremos agregar un nuevo campo primero lo agregamos en el codigo, luego desasemos la migracion, y luego la volvemos hacer.
+si queremos agregar un campo nuevo a una tabla ya existente, para no afectar la tabla con los datos debemos crear una nueva migracion. {php artisan make:migration add_phone_to_messages_table --table=messages }
+
+{php artisan migrate:refresh } hace primero el rollback y luego ejecuta el migrate.
+{php artisan make:migration categorias --create=cate}
+
+{php artisan make:model Categorias -cmf} c=controlador m=migration f=factory.
+
+{php artisan make:model Cliente -m}
+
+{php artisan make:controller API/PostController --api --model=Cliente} --api = solo los metodos para una API
+
+{php artisan make:migration create_recipe_tag_table} el nombre de las tablas se escribe en singular y en orden alfabetico.
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Que es significa REST: Representational State Transfer.
+
+Para ver o investigar un comando utilizamos la ayuda asi {php artisan -h make:controller}
+Para crear un controlador con todas las funciones utilizamos el comando {php artisan make:controller MessagesController --resource}
+
+Ejemplo: {
+	// Guardar datos se le llama QUERY BUILDER.
+        DB::table('messages')->insert([
+            "nombre" => $request->nombre,
+            "email" => $request->email,
+            "mensaje" => $request->mensaje,
+            "created_at" => Carbon::now(),
+            "updated_at" => Carbon::now()
+        ]);
+}
+
+
+composer require laravel/ui:*
+php artisan ui bootstrap --auth
+npm install
+
+
+php artisan key:generate
+
+php artisan migrate:fresh --seed (Empieza desde cero elimina todas las tablas si las hay)
+
+cp .env.example .env
+
+php artisan migrate:refresh
+
+php artisan make:model Zonas -mcr
+
+systemctl restart apache2
+
+sudo a2enmod php8.1
+
+sudo a2dismod php7.3
+
+sudo dpkg --get-selections | grep php
+
+php artisan route:list
+php artisan r:l --path=api (muestra las rutas que estan dentro de API)
+
+composer update --ignore-platform-reqs
+
+------------------------------------------------------------------------------------------------------------------------------------
+
+// COMANDO PARA CREAR FACTORIES
+
+Los factories definen como se van a llenar los datos de cada uno de nuetros modelos, la funcion de un factory es crear una estructura inicial de datos.
+Los Seeder cuantos registro queremos añadir a nuestra BD
+
+php artisan make:factory PropertyFactory --model=Property
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+D.R.Y: Don´t Repeat Yourself (No te repitas)
+
+sudo dpkg --get-selections | grep php
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+HTTP:
+Usa TCP(Protocolo de control de transmision) para abrir conexiones entre clientes y servidores para pasar las solicitudes y respuestas entre ellos.
+
+HTTP es un protocolo sin estado, lo que significa que cada solicitud de datos se trata de forma aislada. Una vez que el servidor envia la respuesta, olvida todo sobre la solicitud original.
+
+URL:
+Uniform Resource Locator(Loocalizado Uniforme de recursos) en internet todo recurso tiene una direccion.
+
+DIRECCIONES IP Y DNS(Servidor De Nombre De Dominios)
+
+----------------------------------------------------------------------------------------------------------------------------------
+FUNCIONES DE UN BACK-END DEVELOPER
+
+1. Gestionar la construccion de las funcionalidades para simplificar y automatizar el proceso de desarrollo de software.
+2. Manejo, documentacion y actualizacion de las librerias del servidor.
+3. Establecer conexiones entre las bases de datos y las soluciones operativas.
+4. Configurar y mantener los servidores.
+5. Definicion configuracion y mantenimiento de las bases de datos.
+
+FORMACION DE UN BACK-END DEVELOPER.
+
+1. Ingenieria en sistemas, ciencias de la computacion o afines.
+2. Posgrado certificaciones reconocidas en lenguajes y frameworks relevantes.
+
+HABILIDADES QUE NECESITAN PARA SER UN DESARROLLADOR BACK-END.
+
+* Experiencia practica demostrada en el analisis, desarrollo y mantenimiento de bases de datos.
+* Comprension de los parametros y criterios de diseño, para traducir los requerimientos en una arquitectura operativa.
+* Diseño y programacion de plantillas, temas e interfaces.
+* Conocimientos y destrezas sobresalientes en el manejo de bases de datos(Oracle, MySQL) y tecnologias SQL y ORM (JPA, HIBERNATE).
+* Experiencia en el desarrollo de aplicaciones web con frameworks relevantes.
+
+FUNCIONES DE UN BACK-END
+
+1. Concocimiento componente del lenguaje marco de programacion backend.
+2. Comprension de las tecnologias front-end web.
+3. Conocimiento de accesibilidad y cumplimiento de seguridad.
+4. Comprension de la experiencia con el control de versiones, como GIT.
+
+En php include(), produce un warning en caso de que no se encuentre el archivo, con require produce un error fatal.
+
+------------------------------------------------------------------------------------------------------------------
+
+* composer require laravel/telescope (Es una herramienta profesional para analizar la optimizacion y auditoria de API´S)
+* php artisan telescope:install
+* php artisan migrate
+
+
+COMO UTILIZAR JWT EN LARAVEL.
+
+1. composer require tymon/jwt-auth
+2. Agregar al proveedor de servicios (Tymon\JWTAuth\Providers\LaravelServiceProvider::class)
+3. Publicarla (php artisan vendor:publish)
+4. Generar una llave secrete (php artisan jwt:secret)
+5. Luego cambiar la configuracion por defecto en la carpeta config/auth.php
+
+INSTALANDO LIVEWIRE
+	* composer require livewire/livewire
+	
+INSTALANDO DEBBUGINS
+	* composer require barryvdh/laravel-debugbar --dev
+
+
+------------------------------------------------------------------------------------------------------------------
+Cuando Creamos con el metodo store es necesario entregar al recurso creado, y es necesario entregar el estado de la peticion, no es buena practica, poner el metodo en crudo porque no dice nada

@@ -1,0 +1,698 @@
+Mostrar las rondas de ASC a DESC
+
+public static function newBitacora($quien,$accion,$lugar,$donde,$afectado) {
+    $queryUser = User::where('id',$quien)->first();
+    if($queryUser->perfil_id == 1) {
+      $modulo = explode(' ', $lugar)[0];
+      if($modulo == 'Checkpoint') {
+        $cliente = Checkpoints::where('id', $afectado)->pluck('cliente_id')->first();
+        $entidad = Checkpoints::where('id', $afectado)->pluck('entidad_id')->first();
+      } else if($modulo == 'Cliente') {
+        $cliente = $afectado;
+      } else if($modulo == 'Dispositivo') {
+        $cliente = Dispositivos::where('id', $afectado)->pluck('cliente_id')->first();
+        $entidad = Dispositivos::where('id', $afectado)->pluck('entidad_id')->first();
+      } else if($modulo == 'Entidad') {
+        $cliente = Entidades::where('id', $afectado)->pluck('cliente_id')->first();
+        $entidad = $afectado;
+      } else if($modulo == 'Ronda') {
+        $cliente = Rondas::where('id', $afectado)->pluck('cliente_id')->first();
+        $entidad = Rondas::where('id', $afectado)->pluck('entidad_id')->first();
+      } else if($modulo == 'Usuario') {
+        $cliente = user_clientes::where('usuario_id', $afectado)->where('selected',1)->pluck('cliente_id')->first();
+        $entidad = user_entidades::where('usuario_id', $afectado)->where('selected',1)->pluck('entidad_id')->first();
+      }
+    } else {
+      $cliente = user_clientes::where('usuario_id', $quien)->where('selected',1)->pluck('cliente_id')->first();
+      $entidad = user_entidades::where('usuario_id', $quien)->where('selected',1)->pluck('entidad_id')->first();
+    }
+
+    $new = new Bitacora;
+    $new->quien = $quien;
+    $new->accion = $accion;
+    $new->lugar = $lugar;
+    $new->donde = $donde;
+    $new->afectado = $afectado;
+    $new->cliente_id = $cliente;
+    if(isset($entidad)) $new->entidad_id = $entidad;
+    $new->save();
+  }
+  
+  
+  
+  
+  
+  
+  
+  public function test()
+    {
+        /*
+        if(date('l') == "Monday") {
+            // AQUI VAN LOS SEMANALES
+            $queryReporteria = Reportes::where('periodicidad','Semanal')->get();
+            foreach($queryReporteria as $qR) {
+                if(in_array("Rondas", explode(',',$qR->tipo))) {
+                    $this->semanalRondas($qR);
+                } 
+                if(in_array("Incidencias", explode(',',$qR->tipo))) {
+                    $this->semanalIncidencias($qR);
+                }
+            }
+        }
+
+        */
+        // AQUI VAN LOS DIARIOS
+        $queryReporteria = Reportes::where('periodicidad','Diaria')->get();
+        //dd($queryReporteria);
+        foreach($queryReporteria as $qR) {
+            if(
+                (date('Y-m-d',strtotime($qR->fecha_envio)) < date('Y-m-d'))
+                || !$qR->fecha_envio
+                ) {
+                    //dd($qR->hora_programacion);
+                if(strtotime($qR->hora_programacion) <= strtotime(date("H:i"))) {
+                    //dd('');
+                    if(in_array("Rondas", explode(',',$qR->tipo))) {
+                        //dd($qR);
+                            $this->diarioRondas($qR);
+                    } 
+                    if(in_array("Incidencias", explode(',',$qR->tipo))) {
+                        $this->diarioIncidencias($qR);
+                    }
+                }
+            }
+
+        }
+    }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  php artisan config:clear
+  php artisan route:clear
+  php artisan view:clear
+  php artisan cache:clear
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+
+Emilio (5,10,11,14,17,18,19,20)
+
+Route::get('enviar/reporte', [TestReportesController::class, 'test'])->name('testReportes');
+
+Para que me lleguen los correos modificamos la parte de test() y traimos todo, luego utilizamos los log de Laravel para guardar los errores
+Para verificar el envio de correos primero hicimos un envio a mi correo luego a otro.
+
+En la bd
+
+
+De acuerdo, aquí está una explicación del código que me has proporcionado:
+
+La función marcarCheckpointQRV_api() se utiliza para marcar un checkpoint en una ronda de inspección. El código recibe los siguientes parámetros de la solicitud:
+
+identificador: El identificador del dispositivo que está marcando el checkpoint.
+ronda: El ID de la ronda en la que se está marcando el checkpoint.
+checkpoint_id: El ID del checkpoint que se está marcando.
+coordenadas: Las coordenadas del checkpoint que se está marcando.
+
+El código comienza verificando que el dispositivo que está marcando el checkpoint esté activo y que la ronda en la que se está marcando el checkpoint no esté finalizada. Para ello, utiliza las siguientes consultas:
+
+Si la consulta devuelve un resultado, el código verifica que el cliente y la entidad asociados a la ronda estén activos. Para ello, utiliza las siguientes consultas:
+
+
+--
+
+
+
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Illuminate\Console\Command;
+use App\Models\HistorialGps;
+use App\Models\Rondas;
+use App\Models\Dispositivos;
+use App\Models\Incidencias;
+use App\Models\RondasPeriodicas;
+use App\Models\HistorialRondas;
+use App\Models\Checkpoints_Rondas;
+use App\Models\FotosHistorialRondas;
+use App\Models\Reportes;
+use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
+use PDF;
+use Mail;
+
+class TestReportesController extends Controller
+{
+    public function diarioRondas($qR) {
+        $finalizadasON = false;
+        $caducadasON = false;
+        //dd($qR->entidad_id);
+        $rondasUnicas = Rondas::whereIn('rondas.entidad_id', explode(',',$qR->entidad_id));
+        //dd($rondasUnicas);
+        if(explode(',', $qR->subtipo)[0] != "Todas") {
+            $subtipoRaw = "(";
+            foreach(explode(',', $qR->subtipo) as $subtipo) {
+                if($subtipo == "Finalizadas") {
+                    $subtipoRaw .= 'rondas.estado = "Finalizado"';
+                    $finalizadasON = true;
+                }
+                if($subtipo == "Caducadas") {
+                    if($subtipoRaw != "(") $subtipoRaw .= ' OR ';
+                    $subtipoRaw .= 'rondas.estado = "Caducada"';
+                    $caducadasON = true;
+                }
+            }
+            $subtipoRaw .= ")";
+            $rondasUnicas->whereRaw($subtipoRaw);
+            // dd($rondasUnicas);
+        } else {
+            $rondasUnicas->whereRaw("(rondas.estado = 'Finalizado' OR rondas.estado = 'Caducada')");
+            $finalizadasON = true;
+            $caducadasON = true;
+        }
+
+        $stringQueryDesde = "";
+        $stringQueryHasta = "";
+
+        if(strtotime(date('Y-m-d H:i',strtotime($qR->hora_hasta))) >= strtotime(date('Y-m-d H:i',strtotime($qR->hora_programacion)))) {
+            if(strtotime(date('Y-m-d H:i',strtotime($qR->hora_desde))) >= strtotime(date('Y-m-d H:i',strtotime($qR->hora_hasta)))) {
+                $stringQueryDesde = date('Y-m-d',strtotime('-2 days'))." ".$qR->hora_desde.":00";
+                $stringQueryHasta = date('Y-m-d',strtotime('-1 days'))." ".$qR->hora_hasta.":00";
+            } else {
+                $stringQueryDesde = date('Y-m-d',strtotime('-1 days'))." ".$qR->hora_desde.":00";
+                $stringQueryHasta = date('Y-m-d',strtotime('-1 days'))." ".$qR->hora_hasta.":00";
+            }
+        } else {
+            if(strtotime(date('Y-m-d H:i',strtotime($qR->hora_desde))) >= strtotime(date('Y-m-d H:i',strtotime($qR->hora_hasta)))) {
+                $stringQueryDesde = date('Y-m-d',strtotime('-1 days'))." ".$qR->hora_desde.":00";
+                $stringQueryHasta = date('Y-m-d')." ".$qR->hora_hasta.":00";
+            } else {
+                $stringQueryDesde = date('Y-m-d')." ".$qR->hora_desde.":00";
+                $stringQueryHasta = date('Y-m-d')." ".$qR->hora_hasta.":00";
+            }
+        }
+
+        $stringQueryDesde = "2023-09-26 00:01:00";
+        $stringQueryHasta = "2023-09-26 23:59:59";
+        //dd($rondasUnicas);
+        $rondasUnicas = $rondasUnicas->join('entidades','entidades.id','rondas.entidad_id')
+        ->join('clientes','clientes.id','rondas.cliente_id')
+        ->leftJoin('dispositivos','dispositivos.id','rondas.dispositivo_id')
+        ->leftJoin('users','users.id','rondas.usuario_id')
+        ->where('tipo_ronda', 'Unica')
+        ->where('fecha_inicio_ronda','>=', $stringQueryDesde)
+        ->where('fecha_inicio_ronda','<=', $stringQueryHasta)
+        ->orderBy('rondas.updated_at','DESC')
+        ->selectRaw(
+            'rondas.tipo_ronda,
+            rondas.id,
+            rondas.nombre,
+            rondas.estado,
+            DATE_FORMAT(rondas.fecha_inicio,"%d/%m/%Y %H:%i") as fecha_inicio,
+            DATE_FORMAT(rondas.fecha_inicio_ronda,"%d/%m/%Y %H:%i") fecha_inicio_ronda,
+            DATE_FORMAT(rondas.fecha_termino,"%d/%m/%Y %H:%i") fecha_termino,
+            dispositivos.id as dispositivoid,
+            dispositivos.nombre as dispositivonombre,
+            dispositivos.identificador as dispositivoidentificador,
+            users.id as usuarioid,
+            users.nombre as usuarionombre,
+            users.username as usuariousername,
+            rondas.created_at,
+            entidades.nombre as entidadnombre,
+            clientes.razon_social as clienterazonsocial,
+            clientes.logo,
+            rondas.updated_at'
+        );
+
+        //dd($rondasUnicas->get());
+
+        $rondas_diarias = RondasPeriodicas::join('rondas','rondas.id','rondas_periodicas.ronda_id')
+        ->where('rondas.tipo_ronda', 'Diaria')
+        ->join('clientes','clientes.id','rondas_periodicas.cliente_id')
+        ->join('entidades','entidades.id','rondas_periodicas.entidad_id')
+        ->leftJoin('dispositivos','dispositivos.id','rondas_periodicas.dispositivo_id')
+        ->leftJoin('users','users.id','rondas_periodicas.usuario_id')
+        ->where('rondas_periodicas.fecha_inicio_ronda','>=', $stringQueryDesde)
+        ->where('rondas_periodicas.fecha_inicio_ronda','<=', $stringQueryHasta)
+        //->where('rondas_periodicas.fecha_inicio_ronda','<=', $stringQueryHasta)
+        ->whereIn('rondas_periodicas.entidad_id', explode(',',$qR->entidad_id));
+        if(explode(',', $qR->subtipo)[0] != "Todas") {
+            $subtipoRaw2 = "(";
+            foreach(explode(',', $qR->subtipo) as $subtipo) {
+                if($subtipo == "Finalizadas") $subtipoRaw2 .= 'rondas_periodicas.estado = "Finalizado"';
+                if($subtipo == "Caducadas") {
+                    if($subtipoRaw2 != "(") $subtipoRaw2 .= ' OR ';
+                    $subtipoRaw2 .= 'rondas_periodicas.estado = "Caducada"';
+                }
+            }
+            $subtipoRaw2 .= ")";
+            $rondas_diarias->whereRaw($subtipoRaw2);
+        } else {
+            $rondas_diarias->whereRaw("(rondas_periodicas.estado = 'Finalizado' OR rondas_periodicas.estado = 'Caducada')");
+        }
+        $rondas_diarias = $rondas_diarias->orderBy('rondas_periodicas.updated_at','DESC')
+        ->selectRaw(
+            'rondas.tipo_ronda,
+            rondas_periodicas.id,
+            rondas.nombre,
+            rondas_periodicas.estado,
+            DATE_FORMAT(rondas.fecha_inicio,"%d/%m/%Y %H:%i") as fecha_inicio,
+            DATE_FORMAT(rondas_periodicas.fecha_inicio_ronda,"%d/%m/%Y %H:%i") fecha_inicio_ronda,
+            DATE_FORMAT(rondas_periodicas.fecha_termino,"%d/%m/%Y %H:%i") fecha_termino,
+            dispositivos.id as dispositivoid,
+            dispositivos.nombre as dispositivonombre,
+            dispositivos.identificador as dispositivoidentificador,
+            users.id as usuarioid,
+            users.nombre as usuarionombre,
+            users.username as usuariousername,
+            rondas_periodicas.created_at,
+            entidades.nombre as entidadnombre,
+            clientes.razon_social as clienterazonsocial,
+            clientes.logo,
+            rondas_periodicas.updated_at'
+            )
+        //->orderBy('updated_at','DESC')->get();
+        ->union($rondasUnicas)->orderBy('updated_at','DESC')->get();
+
+        //dd($rondas_diarias);
+        $rondas_diarias;
+        $clientelogo = "";
+        $caducadas = 0;
+        $finalizadas = 0;
+        $entidades = [];
+
+        foreach($rondas_diarias as $key=>$r) {
+            //dd($rondas_diarias);
+            if(!array_key_exists($r->entidadnombre, $entidades)) $entidades[$r->entidadnombre] = ["caducadas" => 0, "finalizadas" => 0, "nombre" => $r->entidadnombre, "rondas" => [],"finalizadasON"=>$finalizadasON,"caducadasON"=>$caducadasON];
+            if($r->estado == "Caducada") $entidades[$r->entidadnombre]['caducadas']++;
+            if($r->estado == "Finalizado") $entidades[$r->entidadnombre]['finalizadas']++;
+            $clientelogo = $r->logo;
+            $historial = [];
+            if($r->tipo_ronda == 'Unica') {
+                $queryHistorial = HistorialRondas::where('ronda_id', $r->id)->orderBy('id','ASC')->get();
+            } else {
+                $queryHistorial = HistorialRondas::where('ronda_periodica_id', $r->id)->orderBy('id','ASC')->get();
+            }
+
+            foreach($queryHistorial as $h) {
+                //dd($queryHistorial);
+                $tipo = "normal";
+                if($h->observacion) $tipo = "Incidencia";
+                $isOmmited = Checkpoints_Rondas::where('id',$h->checkpoint_ronda_id)->where('ommited',1)->first();
+                $observacion = $h->observacion;
+                if($isOmmited) {
+                    $tipo = "Omitir";
+                    $observacion = $isOmmited->motivo;
+                }
+                $historial[] = ['tipo' => $tipo, 'evento' => $h->evento,
+                'observacion' => $observacion,'fecha' => date('d/m/Y H:i',strtotime($h->created_at))];
+            }
+            $r['historial'] = $historial;
+            $entidades[$r->entidadnombre]['rondas'][] = $r;
+        }
+        
+        //dd($entidades);
+        if(COUNT($entidades) > 0) {
+            $pdfs = [];
+            foreach($entidades as $e) {
+
+                $pdfs[] = PDF::loadView('pdf.reporteRonda', ['rondas'=>$e['rondas'],'clientelogo'=>$clientelogo,'milogo'=>asset('images/logo/controlrondas_80.png')]);
+            }
+            //dd($entidades);
+            $data = [
+                "email" => "edwinalexanderbernardinomoran@gmail.com",
+                //"email"=>$qR->correo,
+                "title"=>"Reporte de rondas dia ".date('d/m/Y',strtotime("-1 days")),
+                "informe" => "del dia ".date('d/m/Y',strtotime("-1 days")),
+                "nombre" => $qR->nombre,
+                "entidades" => $entidades
+            ];
+
+            //dd($data);
+
+            Mail::send('mails/reporteRonda', $data, function ($message) use ($data, $pdfs) {
+                $message->to($data["email"], $data["email"])
+                    ->subject($data["title"]);
+                    foreach($pdfs as $pdf) {
+                        $message->attachData($pdf->output(), "reporte_rondas_dia_".date('d_m_Y',strtotime('-1 days')).".pdf");
+                    } 
+            });
+
+            $update = Reportes::find($qR->id);
+            $update->fecha_envio = date('Y-m-d H:i:s');
+            $update->save();
+        }
+    }
+
+    public function diarioIncidencias($qR) {
+
+        $stringQueryDesde = "";
+        $stringQueryHasta = "";
+
+        if(strtotime(date('Y-m-d H:i',strtotime($qR->hora_hasta))) >= strtotime(date('Y-m-d H:i',strtotime($qR->hora_programacion)))) {
+            if(strtotime(date('Y-m-d H:i',strtotime($qR->hora_desde))) >= strtotime(date('Y-m-d H:i',strtotime($qR->hora_hasta)))) {
+                $stringQueryDesde = date('Y-m-d',strtotime('-2 days'))." ".$qR->hora_desde.":00";
+                $stringQueryHasta = date('Y-m-d',strtotime('-1 days'))." ".$qR->hora_hasta.":00";
+            } else {
+                $stringQueryDesde = date('Y-m-d',strtotime('-1 days'))." ".$qR->hora_desde.":00";
+                $stringQueryHasta = date('Y-m-d',strtotime('-1 days'))." ".$qR->hora_hasta.":00";
+            }
+        } else {
+            if(strtotime(date('Y-m-d H:i',strtotime($qR->hora_desde))) >= strtotime(date('Y-m-d H:i',strtotime($qR->hora_hasta)))) {
+                $stringQueryDesde = date('Y-m-d',strtotime('-1 days'))." ".$qR->hora_desde.":00";
+                $stringQueryHasta = date('Y-m-d')." ".$qR->hora_hasta.":00";
+            } else {
+                $stringQueryDesde = date('Y-m-d')." ".$qR->hora_desde.":00";
+                $stringQueryHasta = date('Y-m-d')." ".$qR->hora_hasta.":00";
+            }
+        }
+
+        $incidencias = Incidencias::where('incidencias.created_at', '>=', $stringQueryDesde)
+        ->where('incidencias.created_at', '<=', $stringQueryHasta)
+        ->join('entidades','entidades.id','incidencias.entidad_id')
+        ->join('clientes','clientes.id','incidencias.cliente_id')
+        ->leftJoin('users','users.id','incidencias.usuario_id')
+        ->whereIn('incidencias.entidad_id', explode(',',$qR->entidad_id))
+        ->select('incidencias.titulo','incidencias.created_at as fecha',
+        'entidades.nombre as entidadnombre','users.nombre as usuarionombre',
+        'incidencias.observacion','incidencias.coords as ubicacion','clientes.logo','incidencias.id','users.id as usuarioid')
+        ->get();
+
+        $clientelogo = "";
+        $entidades = [];
+
+        foreach($incidencias as $i) {
+            $clientelogo = $i->logo;
+            $i['fotos'] = FotosHistorialRondas::where('incidencia_id', $i->id)
+            ->orderBy('id','ASC')
+            ->take(3)
+            ->get();
+
+            if(!array_key_exists($i->entidadnombre, $entidades)) $entidades[$i->entidadnombre] = ["nombre"=>$i->entidadnombre, "incidencias" => []];
+            $entidades[$i->entidadnombre]['incidencias'][] = $i;
+        }
+
+        if(COUNT($incidencias) > 0) {
+            $pdfs = [];
+            foreach($entidades as $e) {
+                $pdfs[] = PDF::loadView('pdf.reporteIncidencia', ['incidencias'=>$e['incidencias'],'clientelogo'=>$clientelogo,'milogo'=>asset('images/logo/controlrondas_80.png')]);
+            }
+
+            $data = [
+                "email"=>$qR->correo,
+                "title"=>"Reporte de incidencias dia ".date('d/m/Y',strtotime("-1 days")),
+                "informe" => "del dia ".date('d/m/Y',strtotime("-1 days")),
+                "nombre" => $qR->nombre,
+                "entidades" => $entidades
+            ];
+
+            Mail::send('mails/reporteIncidencia', $data, function ($message) use ($data, $pdfs) {
+                $message->to($data["email"], $data["email"])
+                    ->subject($data["title"]);
+                foreach($pdfs as $pdf) {
+                    $message->attachData($pdf->output(), "reporte_incidencias_dia_".date('d_m_Y',strtotime('-1 days')).".pdf");
+                }    
+            });
+            
+            $update = Reportes::find($qR->id);
+            $update->fecha_envio = date('Y-m-d H:i:s');
+            $update->save();
+        }
+    }
+
+    public function semanalRondas($qR) {
+        $finalizadasON = false;
+        $caducadasON = false;
+        $rondasUnicas = Rondas::whereIn('rondas.entidad_id', explode(',',$qR->entidad_id));
+        if(explode(',', $qR->subtipo)[0] != "Todas") {
+            $subtipoRaw = "(";
+            foreach(explode(',', $qR->subtipo) as $subtipo) {
+                if($subtipo == "Finalizadas") {
+                    $subtipoRaw .= 'rondas.estado = "Finalizado"';
+                    $finalizadasON = true;
+                }
+                if($subtipo == "Caducadas") {
+                    if($subtipoRaw != "(") $subtipoRaw .= ' OR ';
+                    $subtipoRaw .= 'rondas.estado = "Caducada"';
+                    $caducadasON = true;
+                }
+            }
+            $subtipoRaw .= ")";
+            $rondasUnicas->whereRaw($subtipoRaw);
+        } else {
+            $rondasUnicas->whereRaw("(rondas.estado = 'Finalizado' OR rondas.estado = 'Caducada')");
+            $finalizadasON = true;
+            $caducadasON = true;
+        }
+        $rondasUnicas = $rondasUnicas->join('entidades','entidades.id','rondas.entidad_id')
+        ->leftJoin('dispositivos','dispositivos.id','rondas.dispositivo_id')
+        ->join('clientes','clientes.id','rondas.cliente_id')
+        ->leftJoin('users','users.id','rondas.usuario_id')
+        ->where('tipo_ronda', 'Unica')
+        ->where('fecha_inicio_ronda','>=', date('Y-m-d',strtotime('monday last week'))." 00:00:00")
+        ->where('fecha_inicio_ronda','<=', date('Y-m-d',strtotime('sunday last week'))." 23:59:59")
+        ->orderBy('rondas.updated_at','DESC')
+        ->selectRaw(
+            'rondas.tipo_ronda,
+            rondas.id,
+            rondas.nombre,
+            rondas.estado,
+            DATE_FORMAT(rondas.fecha_inicio,"%d/%m/%Y %H:%i") as fecha_inicio,
+            DATE_FORMAT(rondas.fecha_inicio_ronda,"%d/%m/%Y %H:%i") fecha_inicio_ronda,
+            DATE_FORMAT(rondas.fecha_termino,"%d/%m/%Y %H:%i") fecha_termino,
+            dispositivos.id as dispositivoid,
+            dispositivos.nombre as dispositivonombre,
+            dispositivos.identificador as dispositivoidentificador,
+            users.id as usuarioid,
+            users.nombre as usuarionombre,
+            users.username as usuariousername,
+            rondas.created_at,
+            entidades.nombre as entidadnombre,
+            clientes.razon_social as clienterazonsocial,
+            clientes.logo,
+            rondas.updated_at'
+        );
+
+        $rondas_diarias = RondasPeriodicas::join('rondas','rondas.id','rondas_periodicas.ronda_id')
+        ->where('rondas.tipo_ronda', 'Diaria')
+        ->join('clientes','clientes.id','rondas_periodicas.cliente_id')
+        ->join('entidades','entidades.id','rondas_periodicas.entidad_id')
+        ->leftJoin('dispositivos','dispositivos.id','rondas_periodicas.dispositivo_id')
+        ->leftJoin('users','users.id','rondas_periodicas.usuario_id')
+        ->where('rondas_periodicas.fecha_inicio_ronda','>=', date('Y-m-d',strtotime('monday last week'))." 00:00:00")
+        ->where('rondas_periodicas.fecha_inicio_ronda','<=', date('Y-m-d',strtotime('sunday last week'))." 23:59:59");
+        if(explode(',', $qR->subtipo)[0] != "Todas") {
+            $subtipoRaw2 = "(";
+            foreach(explode(',', $qR->subtipo) as $subtipo) {
+                if($subtipo == "Finalizadas") $subtipoRaw2 .= 'rondas_periodicas.estado = "Finalizado"';
+                if($subtipo == "Caducadas") {
+                    if($subtipoRaw2 != "(") $subtipoRaw2 .= ' OR ';
+                    $subtipoRaw2 .= 'rondas_periodicas.estado = "Caducada"';
+                }
+            }
+            $subtipoRaw2 .= ")";
+            $rondas_diarias->whereRaw($subtipoRaw2);
+        } else {
+            $rondas_diarias->whereRaw("(rondas_periodicas.estado = 'Finalizado' OR rondas_periodicas.estado = 'Caducada')");
+        }
+        $rondas_diarias = $rondas_diarias->orderBy('rondas_periodicas.updated_at','DESC')
+        ->selectRaw(
+            'rondas.tipo_ronda,
+            rondas_periodicas.id,
+            rondas.nombre,
+            rondas_periodicas.estado,
+            DATE_FORMAT(rondas.fecha_inicio,"%d/%m/%Y %H:%i") as fecha_inicio,
+            DATE_FORMAT(rondas_periodicas.fecha_inicio_ronda,"%d/%m/%Y %H:%i") fecha_inicio_ronda,
+            DATE_FORMAT(rondas_periodicas.fecha_termino,"%d/%m/%Y %H:%i") fecha_termino,
+            dispositivos.id as dispositivoid,
+            dispositivos.nombre as dispositivonombre,
+            dispositivos.identificador as dispositivoidentificador,
+            users.id as usuarioid,
+            users.nombre as usuarionombre,
+            users.username as usuariousername,
+            rondas_periodicas.created_at,
+            entidades.nombre as entidadnombre,
+            clientes.razon_social as clienterazonsocial,
+            clientes.logo,
+            rondas_periodicas.updated_at'
+            )
+        ->union($rondasUnicas)->orderBy('updated_at','DESC')->get();
+
+        $rondas_diarias;
+        $clientelogo = "";
+        $caducadas = 0;
+        $finalizadas = 0;
+        $entidades = [];
+        
+        foreach($rondas_diarias as $r) {
+            if(!array_key_exists($r->entidadnombre, $entidades)) $entidades[$r->entidadnombre] = ["caducadas" => 0, "finalizadas" => 0, "nombre" => $r->entidadnombre, "rondas" => [],"finalizadasON"=>$finalizadasON,"caducadasON"=>$caducadasON];
+            if($r->estado == "Caducada") $entidades[$r->entidadnombre]['caducadas']++;
+            if($r->estado == "Finalizado") $entidades[$r->entidadnombre]['finalizadas']++;
+            $clientelogo = $r->logo;
+            $historial = [];
+            if($r->tipo_ronda == 'Unica') {
+                $queryHistorial = HistorialRondas::where('ronda_id', $r->id)->orderBy('id','ASC')->get();
+            } else {
+                $queryHistorial = HistorialRondas::where('ronda_periodica_id', $r->id)->orderBy('id','ASC')->get();
+            }
+
+            foreach($queryHistorial as $h) {
+                $tipo = "normal";
+                if($h->observacion) $tipo = "Incidencia";
+                $isOmmited = Checkpoints_Rondas::where('id',$h->checkpoint_ronda_id)->where('ommited',1)->first();
+                $observacion = $h->observacion;
+                if($isOmmited) {
+                    $tipo = "Omitir";
+                    $observacion = $isOmmited->motivo;
+                }
+                $historial[] = ['tipo' => $tipo, 'evento' => $h->evento,
+                'observacion' => $observacion,'fecha' => date('d/m/Y H:i',strtotime($h->created_at))];
+            }
+            $r['historial'] = $historial;
+            $entidades[$r->entidadnombre]['rondas'][] = $r;
+        }
+
+        if(COUNT($entidades) > 0) {
+            $pdfs = [];
+            foreach($entidades as $e) {
+                $pdfs[] = PDF::loadView('pdf.reporteRonda', ['rondas'=>$e['rondas'],'clientelogo'=>$clientelogo,'milogo'=>asset('images/logo/controlrondas_80.png')]);
+            }
+            
+            $data = [
+                "email"=>$qR->correo,
+                "title"=>"Reporte de rondas semana ".date('d/m/Y',strtotime("monday last week")). " - ".date('d/m/Y',strtotime("sunday last week")),
+                "informe" => "de la semana del ".date('d/m/Y',strtotime("monday last week"))." al ".date('d/m/Y',strtotime("sunday last week")),
+                "nombre" => $qR->nombre,
+                "entidades" => $entidades
+            ];
+
+            Mail::send('mails/reporteRonda', $data, function ($message) use ($data, $pdfs) {
+                $message->to($data["email"], $data["email"])
+                    ->subject($data["title"]);
+                    foreach($pdfs as $pdf) {
+                        $message->attachData($pdf->output(), "reporte_rondas_semana_".date('d_m_Y',strtotime('monday last week')).".pdf");
+                    } 
+            });
+
+            $update = Reportes::find($qR->id);
+            $update->fecha_envio = date('Y-m-d H:i:s');
+            $update->save();
+        }
+    }
+
+    public function semanalIncidencias($qR) {
+        $incidencias = Incidencias::where('incidencias.created_at', '>=', date('Y-m-d',strtotime("monday last week"))." 00:00:00")
+        ->where('incidencias.created_at', '<=', date('Y-m-d',strtotime("sunday last week"))." 23:59:59")
+        ->join('entidades','entidades.id','incidencias.entidad_id')
+        ->join('clientes','clientes.id','incidencias.cliente_id')
+        ->leftJoin('users','users.id','incidencias.usuario_id')
+        ->whereIn('incidencias.entidad_id', explode(',',$qR->entidad_id))
+        ->select('incidencias.titulo','incidencias.created_at as fecha',
+        'entidades.nombre as entidadnombre','users.nombre as usuarionombre',
+        'incidencias.observacion','incidencias.coords as ubicacion','clientes.logo','incidencias.id','users.id as usuarioid')
+        ->get();
+
+        $clientelogo = "";
+        $entidades = [];
+
+        foreach($incidencias as $i) {
+            $clientelogo = $i->logo;
+            $i['fotos'] = FotosHistorialRondas::where('incidencia_id', $i->id)
+            ->orderBy('id','ASC')
+            ->take(3)
+            ->get();
+
+            if(!array_key_exists($i->entidadnombre, $entidades)) $entidades[$i->entidadnombre] = ["nombre"=>$i->entidadnombre, "incidencias" => []];
+            $entidades[$i->entidadnombre]['incidencias'][] = $i;
+        }
+
+        if(COUNT($entidades) > 0) {
+            $pdfs = [];
+            foreach($entidades as $e) {
+                $pdfs[] = PDF::loadView('pdf.reporteIncidencia', ['incidencias'=>$e['incidencias'],'clientelogo'=>$clientelogo,'milogo'=>asset('images/logo/controlrondas_80.png')]);
+            }
+            $data = [
+                "email"=>$qR->correo,
+                "title"=>"Reporte de incidencias semana ".date('d/m/Y',strtotime("monday last week"))." - ".date('d/m/Y',strtotime("sunday last week")),
+                "informe" => "de la semana del ".date('d/m/Y',strtotime("monday last week"))." al ".date('d/m/Y',strtotime("sunday last week")),
+                "nombre" => $qR->nombre,
+                "entidades" => $entidades
+            ];
+
+            Mail::send('mails/reporteIncidencia', $data, function ($message) use ($data, $pdfs) {
+                $message->to($data["email"], $data["email"])
+                    ->subject($data["title"]);
+                foreach($pdfs as $pdf) {
+                    $message->attachData($pdf->output(), "reporte_incidencias_semana_".date('d_m_Y',strtotime('monday_last_week')).".pdf");
+                }
+            });
+
+            $update = Reportes::find($qR->id);
+            $update->fecha_envio = date('Y-m-d H:i:s');
+            $update->save();
+        }
+    }
+
+    public function test()
+    {
+        if(date('l') == "Monday") {
+            // AQUI VAN LOS SEMANALES
+            $queryReporteria = Reportes::where('periodicidad','Semanal')->get();
+            foreach($queryReporteria as $qR) {
+                if(in_array("Rondas", explode(',',$qR->tipo))) {
+                    $this->semanalRondas($qR);
+                } 
+                if(in_array("Incidencias", explode(',',$qR->tipo))) {
+                    $this->semanalIncidencias($qR);
+                }
+            }
+        }
+
+        Log::info('Ingresa envio de reporteria Diaria');
+        // AQUI VAN LOS DIARIOS
+        $queryReporteria = Reportes::where('periodicidad','Diaria')->where(function($query){
+            $query->whereNull('fecha_envio')
+            ->orWhereDate('fecha_envio', '<', Carbon::now()->startOfDay());
+        })->get(); 
+
+        Log::info($queryReporteria);
+
+        foreach($queryReporteria as $qR) {
+            if(Carbon::parse($qR->hora_programacion)->format("H:i")<= ( Carbon::now()->format("H:i"))) {
+                if(in_array("Rondas", explode(',',$qR->tipo))) {
+                        $this->diarioRondas($qR);
+                } 
+                if(in_array("Incidencias", explode(',',$qR->tipo))) {
+                    $this->diarioIncidencias($qR);
+                }
+            }
+        }
+    }
+}
